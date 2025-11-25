@@ -130,6 +130,32 @@ export class CharacterService {
   }
 
   /**
+   * Remove item from inventory
+   */
+  removeItemFromInventory(characterId: string, itemId: string): boolean {
+    let removed = false;
+
+    this.updateCharacter(characterId, char => {
+      const itemIndex = char.inventory.items.findIndex(i => i.id === itemId);
+      if (itemIndex === -1) {
+        return char;
+      }
+      removed = true;
+      const newItems = [...char.inventory.items];
+      newItems.splice(itemIndex, 1);
+      return {
+        ...char,
+        inventory: {
+          ...char.inventory,
+          items: newItems
+        }
+      };
+    });
+
+    return removed;
+  }
+
+  /**
    * Equip an item
    */
   equipItem(characterId: string, itemId: string): void {

@@ -380,7 +380,8 @@ export class InventoryComponent {
       this.characterService.healCharacter(char.id, consumable.healAmount);
     }
 
-    // Remove item from inventory (would need to implement in service)
+    // Remove item from inventory after use
+    this.characterService.removeItemFromInventory(char.id, this.selectedItem.id);
     this.selectedItem = null;
   }
 }
