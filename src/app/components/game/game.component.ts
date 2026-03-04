@@ -243,11 +243,18 @@ export class GameComponent implements OnInit {
   saveMessage = '';
   saveError = false;
 
+  private _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
   private autoSaveEffect = effect(() => {
-    // Auto-save when character state changes (after initial load)
+    // Debounced auto-save when character state changes (after initial load)
     const char = this.characterService.activeCharacter();
     if (char && this._initialized) {
-      this.saveGameService.saveGame();
+      if (this._autoSaveTimer) {
+        clearTimeout(this._autoSaveTimer);
+      }
+      this._autoSaveTimer = setTimeout(() => {
+        this.saveGameService.saveGame();
+      }, 1000);
     }
   });
 

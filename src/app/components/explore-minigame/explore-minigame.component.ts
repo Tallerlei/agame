@@ -103,6 +103,9 @@ export class ExploreMinigameComponent implements OnInit {
   targetCol = 0;
   steps = 0;
 
+  private static readonly OBSTACLE_DENSITY = 0.15;
+  private static readonly MIN_TARGET_DISTANCE_FACTOR = 0.5;
+
   ngOnInit(): void {
     this.generateGrid();
   }
@@ -120,17 +123,18 @@ export class ExploreMinigameComponent implements OnInit {
     this.playerCol = Math.floor(Math.random() * this.gridSize);
     this.getCell(this.playerRow, this.playerCol).revealed = true;
 
-    // Place target far from player
+    // Place target far enough from player (at least half grid size Manhattan distance)
+    const minTargetDistance = Math.floor(this.gridSize * ExploreMinigameComponent.MIN_TARGET_DISTANCE_FACTOR);
     do {
       this.targetRow = Math.floor(Math.random() * this.gridSize);
       this.targetCol = Math.floor(Math.random() * this.gridSize);
     } while (
-      Math.abs(this.targetRow - this.playerRow) + Math.abs(this.targetCol - this.playerCol) < Math.floor(this.gridSize / 2)
+      Math.abs(this.targetRow - this.playerRow) + Math.abs(this.targetCol - this.playerCol) < minTargetDistance
     );
     this.getCell(this.targetRow, this.targetCol).type = 'target';
 
-    // Place obstacles (15% of remaining cells)
-    const obstacleCount = Math.floor(this.gridSize * this.gridSize * 0.15);
+    // Place obstacles
+    const obstacleCount = Math.floor(this.gridSize * this.gridSize * ExploreMinigameComponent.OBSTACLE_DENSITY);
     let placed = 0;
     while (placed < obstacleCount) {
       const r = Math.floor(Math.random() * this.gridSize);

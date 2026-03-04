@@ -57,7 +57,7 @@ export class CharacterService {
   }
 
   /**
-   * Add experience to a character. Returns LevelUpInfo if a level-up occurred.
+   * Add experience to a character. Returns LevelUpInfo if a level-up occurred, or null otherwise.
    */
   addExperience(characterId: string, amount: number): LevelUpInfo | null {
     let levelUpInfo: LevelUpInfo | null = null;
