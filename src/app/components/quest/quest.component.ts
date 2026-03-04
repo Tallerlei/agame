@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { QuestService } from '../../services/quest.service';
 import { CharacterService } from '../../services/character.service';
-import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
+import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models/quest.model';
 
 @Component({
   selector: 'app-quest',
@@ -11,6 +11,46 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
   template: `
     <div class="quest-container">
       <h2>📜 Quests</h2>
+
+      <!-- Quest Completion Modal -->
+      @if (pendingCompletion()) {
+        <div class="completion-overlay">
+          <div class="completion-modal">
+            <div class="completion-header">
+              <span class="trophy">🏆</span>
+              <h2>Quest Complete!</h2>
+            </div>
+            <h3>{{ pendingCompletion()!.name }}</h3>
+            <p class="completion-desc">{{ pendingCompletion()!.description }}</p>
+
+            <div class="rewards-section">
+              <h4>Your Rewards:</h4>
+              <div class="reward-items">
+                <div class="reward-item">
+                  <span class="reward-icon">💰</span>
+                  <span class="reward-value">{{ pendingCompletion()!.rewards.gold }} Gold</span>
+                </div>
+                <div class="reward-item">
+                  <span class="reward-icon">⭐</span>
+                  <span class="reward-value">{{ pendingCompletion()!.rewards.experience }} XP</span>
+                </div>
+                @if (pendingCompletion()!.rewards.items && pendingCompletion()!.rewards.items!.length > 0) {
+                  @for (item of pendingCompletion()!.rewards.items; track item.id) {
+                    <div class="reward-item">
+                      <span class="reward-icon">🎁</span>
+                      <span class="reward-value">{{ item.name }}</span>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+
+            <button class="claim-btn" (click)="claimRewards()">
+              ✅ Claim Rewards
+            </button>
+          </div>
+        </div>
+      }
 
       <!-- Active Quest -->
       @if (activeQuest()) {
@@ -42,7 +82,12 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
             </div>
 
             <div class="quest-actions">
-              <button class="explore-btn" (click)="explore()">
+              <button
+                class="explore-btn"
+                [disabled]="!hasExploreObjective()"
+                [title]="hasExploreObjective() ? 'Explore to progress location objective' : 'No exploration objective for this quest'"
+                (click)="explore()"
+              >
                 🧭 Explore
               </button>
               <button class="abandon-btn" (click)="abandonQuest()">
@@ -87,6 +132,32 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
           </div>
         }
       </div>
+
+      <!-- Completed Quests -->
+      @if (completedQuests().length > 0) {
+        <div class="completed-quests">
+          <h3>✅ Completed Quests ({{ completedQuests().length }})</h3>
+          <div class="quest-list">
+            @for (quest of completedQuests(); track quest.id) {
+              <div class="quest-card completed">
+                <div class="quest-header">
+                  <span class="quest-name">{{ quest.name }}</span>
+                  <span class="difficulty" [class]="quest.difficulty.toLowerCase()">
+                    {{ quest.difficulty }}
+                  </span>
+                </div>
+                <p class="quest-desc">{{ quest.description }}</p>
+                <div class="quest-meta">
+                  <span class="rewards">
+                    💰 {{ quest.rewards.gold }} | ⭐ {{ quest.rewards.experience }}
+                  </span>
+                  <span class="completed-badge">✅ Done</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -94,6 +165,7 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       border-radius: 12px;
       padding: 1.5rem;
+      position: relative;
     }
 
     h2 {
@@ -118,6 +190,11 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
     .quest-card.active {
       border: 2px solid #ffd700;
       box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+    }
+
+    .quest-card.completed {
+      opacity: 0.7;
+      border-left: 4px solid #27ae60;
     }
 
     .quest-header {
@@ -214,6 +291,11 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
       font-size: 0.85rem;
     }
 
+    .completed-badge {
+      color: #27ae60;
+      font-weight: bold;
+    }
+
     .quest-actions {
       display: flex;
       gap: 0.5rem;
@@ -232,9 +314,15 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
       transition: all 0.2s;
     }
 
-    .explore-btn:hover {
+    .explore-btn:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
+    }
+
+    .explore-btn:disabled {
+      background: #4a4a6a;
+      color: #8a8a8a;
+      cursor: not-allowed;
     }
 
     .abandon-btn {
@@ -287,6 +375,121 @@ import { Quest, QuestDifficulty, QuestStatus } from '../../models/quest.model';
       flex-direction: column;
       gap: 1rem;
     }
+
+    /* Quest Completion Overlay */
+    .completion-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .completion-modal {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border: 2px solid #ffd700;
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+      animation: pop-in 0.3s ease-out;
+    }
+
+    @keyframes pop-in {
+      from { transform: scale(0.8); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    .completion-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .completion-header h2 {
+      margin: 0;
+      font-size: 1.8rem;
+    }
+
+    .trophy {
+      font-size: 2.5rem;
+    }
+
+    .completion-modal h3 {
+      color: #ffd700;
+      font-size: 1.3rem;
+      margin: 0.5rem 0;
+    }
+
+    .completion-desc {
+      color: #a0a0a0;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .rewards-section {
+      background: #2a2a4a;
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+
+    .rewards-section h4 {
+      color: #e0e0e0;
+      margin: 0 0 0.75rem 0;
+      font-size: 0.95rem;
+    }
+
+    .reward-items {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .reward-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .reward-icon {
+      font-size: 1.4rem;
+    }
+
+    .reward-value {
+      color: #ffd700;
+      font-size: 1.1rem;
+      font-weight: bold;
+    }
+
+    .claim-btn {
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+      color: white;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .claim-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(39, 174, 96, 0.5);
+    }
+
+    .completed-quests {
+      margin-top: 1.5rem;
+    }
   `]
 })
 export class QuestComponent {
@@ -295,11 +498,14 @@ export class QuestComponent {
 
   availableQuests = this.questService.availableQuests;
   activeQuest = this.questService.activeQuest;
+  completedQuests = this.questService.completedQuests;
+  pendingCompletion = this.questService.pendingCompletion;
 
   canAcceptQuest(quest: Quest): boolean {
     const character = this.characterService.activeCharacter();
     if (!character) return false;
     if (this.activeQuest()) return false;
+    if (this.pendingCompletion()) return false;
     return character.level >= quest.levelRequired;
   }
 
@@ -316,5 +522,17 @@ export class QuestComponent {
 
   explore(): void {
     this.questService.explore();
+  }
+
+  claimRewards(): void {
+    this.questService.claimRewards();
+  }
+
+  hasExploreObjective(): boolean {
+    const quest = this.activeQuest();
+    if (!quest) return false;
+    return quest.objectives.some(
+      obj => obj.type === ObjectiveType.EXPLORE_LOCATION && !obj.completed
+    );
   }
 }

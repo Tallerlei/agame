@@ -1,6 +1,8 @@
 import {
   QuestDifficulty,
-  getDifficultyMultiplier
+  getDifficultyMultiplier,
+  QuestObjective,
+  ObjectiveType
 } from './quest.model';
 
 describe('Quest Model', () => {
@@ -30,6 +32,35 @@ describe('Quest Model', () => {
       expect(medium).toBeGreaterThan(easy);
       expect(hard).toBeGreaterThan(medium);
       expect(legendary).toBeGreaterThan(hard);
+    });
+  });
+
+  describe('QuestObjective targetEnemyType', () => {
+    it('should allow creating a DEFEAT_ENEMIES objective without targetEnemyType', () => {
+      const objective: QuestObjective = {
+        id: '1',
+        type: ObjectiveType.DEFEAT_ENEMIES,
+        description: 'Defeat 5 enemies',
+        targetCount: 5,
+        currentCount: 0,
+        completed: false
+      };
+
+      expect(objective.targetEnemyType).toBeUndefined();
+    });
+
+    it('should allow creating a DEFEAT_ENEMIES objective with targetEnemyType', () => {
+      const objective: QuestObjective = {
+        id: '1',
+        type: ObjectiveType.DEFEAT_ENEMIES,
+        description: 'Defeat 3 goblins',
+        targetCount: 3,
+        currentCount: 0,
+        completed: false,
+        targetEnemyType: 'Goblin'
+      };
+
+      expect(objective.targetEnemyType).toBe('Goblin');
     });
   });
 });
