@@ -3,14 +3,31 @@ import { CommonModule } from '@angular/common';
 import { QuestService } from '../../services/quest.service';
 import { CharacterService } from '../../services/character.service';
 import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models/quest.model';
+import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.component';
 
 @Component({
   selector: 'app-quest',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ExploreMinigameComponent],
   template: `
     <div class="quest-container">
       <h2>📜 Quests</h2>
+
+      <!-- Current Location -->
+      <div class="current-location">
+        📍 Current Location: <strong>{{ currentLocation() }}</strong>
+      </div>
+
+      <!-- Explore Minigame Overlay -->
+      @if (exploringLocation(); as loc) {
+        <div class="explore-overlay">
+          <app-explore-minigame
+            [locationName]="loc"
+            (completed)="onExploreComplete()"
+            (cancel)="onExploreCancel()"
+          ></app-explore-minigame>
+        </div>
+      }
 
       <!-- Quest Completion Modal -->
       @if (pendingCompletion()) {
@@ -86,7 +103,7 @@ import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models
                 class="explore-btn"
                 [disabled]="!hasExploreObjective()"
                 [title]="hasExploreObjective() ? 'Explore to progress location objective' : 'No exploration objective for this quest'"
-                (click)="explore()"
+                (click)="startExplore()"
               >
                 🧭 Explore
               </button>
@@ -490,6 +507,31 @@ import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models
     .completed-quests {
       margin-top: 1.5rem;
     }
+
+    .current-location {
+      text-align: center;
+      color: #a0a0a0;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      background: #2a2a4a;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .current-location strong {
+      color: #ffd700;
+    }
+
+    .explore-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
   `]
 })
 export class QuestComponent {
@@ -500,6 +542,8 @@ export class QuestComponent {
   activeQuest = this.questService.activeQuest;
   completedQuests = this.questService.completedQuests;
   pendingCompletion = this.questService.pendingCompletion;
+  currentLocation = this.questService.currentLocation;
+  exploringLocation = this.questService.exploringLocation;
 
   canAcceptQuest(quest: Quest): boolean {
     const character = this.characterService.activeCharacter();
@@ -520,8 +564,16 @@ export class QuestComponent {
     this.questService.abandonQuest();
   }
 
-  explore(): void {
-    this.questService.explore();
+  startExplore(): void {
+    this.questService.startExplore();
+  }
+
+  onExploreComplete(): void {
+    this.questService.completeExplore();
+  }
+
+  onExploreCancel(): void {
+    this.questService.cancelExplore();
   }
 
   claimRewards(): void {

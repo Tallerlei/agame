@@ -63,6 +63,7 @@ export interface Quest {
   objectives: QuestObjective[];
   rewards: QuestReward;
   levelRequired: number;
+  location?: string;
 }
 
 /**
