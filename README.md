@@ -29,6 +29,10 @@ A browser-based RPG game featuring fighting and exploration with unique characte
 - **Trinkets**: Accessories with stat bonuses
 - **Rarity Tiers**: Common, Uncommon, Rare, Epic, Legendary
 
+## Play Online
+
+🎮 **[Play Epic Adventure](https://tallerlei.github.io/agame/)** - The game is deployed to GitHub Pages and updated automatically whenever changes are pushed to the master branch.
+
 ## Getting Started
 
 ### Prerequisites
@@ -64,6 +68,7 @@ npm test
 - **Framework**: Angular 18
 - **Language**: TypeScript
 - **Styling**: CSS with custom game-themed design
+- **CI/CD**: GitHub Actions for automatic deployment to GitHub Pages
 
 ## Game Design
 
