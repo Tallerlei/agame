@@ -15,9 +15,13 @@ import { CharacterService } from './character.service';
 export class QuestService {
   private _availableQuests = signal<Quest[]>([]);
   private _activeQuest = signal<Quest | null>(null);
+  private _completedQuests = signal<Quest[]>([]);
+  private _pendingCompletion = signal<Quest | null>(null);
 
   availableQuests = this._availableQuests.asReadonly();
   activeQuest = this._activeQuest.asReadonly();
+  completedQuests = this._completedQuests.asReadonly();
+  pendingCompletion = this._pendingCompletion.asReadonly();
 
   constructor(private characterService: CharacterService) {
     this.generateInitialQuests();
@@ -29,7 +33,7 @@ export class QuestService {
   private generateInitialQuests(): void {
     const quests: Quest[] = [
       this.createQuest('Goblin Menace', 'Defeat the goblins terrorizing the village', QuestDifficulty.EASY, 1, [
-        { id: '1', type: ObjectiveType.DEFEAT_ENEMIES, description: 'Defeat 3 goblins', targetCount: 3, currentCount: 0, completed: false }
+        { id: '1', type: ObjectiveType.DEFEAT_ENEMIES, description: 'Defeat 3 goblins', targetCount: 3, currentCount: 0, completed: false, targetEnemyType: 'Goblin' }
       ]),
       this.createQuest('Dark Forest', 'Explore the mysterious dark forest', QuestDifficulty.MEDIUM, 3, [
         { id: '1', type: ObjectiveType.EXPLORE_LOCATION, description: 'Explore the forest', targetCount: 1, currentCount: 0, completed: false },
@@ -127,12 +131,24 @@ export class QuestService {
   }
 
   /**
-   * Complete the active quest
+   * Complete the active quest — move it to pending completion so the player can claim rewards
    */
   private completeQuest(): void {
     const quest = this._activeQuest();
+    if (!quest) return;
+
+    const completedQuest = { ...quest, status: QuestStatus.COMPLETED };
+    this._activeQuest.set(null);
+    this._pendingCompletion.set(completedQuest);
+  }
+
+  /**
+   * Claim the rewards for the pending completed quest
+   */
+  claimRewards(): void {
+    const quest = this._pendingCompletion();
     const character = this.characterService.activeCharacter();
-    
+
     if (!quest || !character) return;
 
     // Award rewards
@@ -147,7 +163,8 @@ export class QuestService {
       }
     }
 
-    this._activeQuest.set(null);
+    this._completedQuests.update(quests => [quest, ...quests]);
+    this._pendingCompletion.set(null);
 
     // Generate new quests
     this.generateNewQuest(character.level);
@@ -222,12 +239,16 @@ export class QuestService {
   /**
    * Record enemy defeat for quest progress
    */
-  recordEnemyDefeat(): void {
+  recordEnemyDefeat(enemyName?: string): void {
     const quest = this._activeQuest();
     if (!quest) return;
 
     const defeatObjective = quest.objectives.find(
-      obj => obj.type === ObjectiveType.DEFEAT_ENEMIES && !obj.completed
+      obj =>
+        obj.type === ObjectiveType.DEFEAT_ENEMIES &&
+        !obj.completed &&
+        (!obj.targetEnemyType ||
+          (enemyName && obj.targetEnemyType.toLowerCase() === enemyName.toLowerCase()))
     );
 
     if (defeatObjective) {

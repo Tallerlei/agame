@@ -39,6 +39,7 @@ export interface QuestObjective {
   targetCount: number;
   currentCount: number;
   completed: boolean;
+  targetEnemyType?: string; // For DEFEAT_ENEMIES objectives: restricts which enemy types count
 }
 
 /**

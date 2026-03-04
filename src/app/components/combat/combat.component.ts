@@ -342,8 +342,8 @@ export class CombatComponent {
   private checkVictory(): void {
     const state = this.combatState();
     if (!state.isActive && state.enemy?.currentHealth === 0) {
-      // Record quest progress
-      this.questService.recordEnemyDefeat();
+      // Record quest progress with the enemy name for type-specific objectives
+      this.questService.recordEnemyDefeat(state.enemy.name);
     }
   }
 
