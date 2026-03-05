@@ -6,7 +6,9 @@ import {
   Weapon,
   Armor,
   Consumable,
-  Trinket
+  Trinket,
+  WeaponType,
+  ArmorClass
 } from '../models/item.model';
 
 @Injectable({
@@ -17,6 +19,23 @@ export class ItemService {
   private armorPrefixes = ['Iron', 'Steel', 'Bronze', 'Leather', 'Plate'];
   private consumableNames = ['Health Potion', 'Mana Potion', 'Elixir', 'Bandage'];
   private trinketNames = ['Ring', 'Amulet', 'Charm', 'Talisman'];
+
+  private weaponTypeMap: Record<string, WeaponType> = {
+    'Sword': WeaponType.SWORD,
+    'Axe': WeaponType.AXE,
+    'Dagger': WeaponType.DAGGER,
+    'Mace': WeaponType.MACE,
+    'Staff': WeaponType.STAFF,
+    'Bow': WeaponType.BOW
+  };
+
+  private armorClassMap: Record<string, ArmorClass> = {
+    'Leather': ArmorClass.LIGHT,
+    'Bronze': ArmorClass.LIGHT,
+    'Iron': ArmorClass.MEDIUM,
+    'Steel': ArmorClass.MEDIUM,
+    'Plate': ArmorClass.HEAVY
+  };
 
   /**
    * Generate a random item based on level
@@ -78,6 +97,7 @@ export class ItemService {
     const baseName = this.weaponNames[Math.floor(Math.random() * this.weaponNames.length)];
     const multiplier = this.getRarityMultiplier(rarity);
     const baseDamage = 5 + level * 2;
+    const weaponType = this.weaponTypeMap[baseName] ?? WeaponType.SWORD;
 
     return {
       id: crypto.randomUUID(),
@@ -87,7 +107,8 @@ export class ItemService {
       rarity,
       value: Math.floor(10 * level * multiplier),
       damage: Math.floor(baseDamage * multiplier),
-      attackSpeed: 1 + Math.random() * 0.5
+      attackSpeed: 1 + Math.random() * 0.5,
+      weaponType
     };
   }
 
@@ -101,6 +122,7 @@ export class ItemService {
     const slotNames: Record<string, string> = { head: 'Helmet', chest: 'Chestplate', legs: 'Leggings', feet: 'Boots' };
     const multiplier = this.getRarityMultiplier(rarity);
     const baseDefense = 2 + level;
+    const armorClass = this.armorClassMap[prefix] ?? ArmorClass.MEDIUM;
 
     return {
       id: crypto.randomUUID(),
@@ -110,7 +132,8 @@ export class ItemService {
       rarity,
       value: Math.floor(8 * level * multiplier),
       defense: Math.floor(baseDefense * multiplier),
-      slot
+      slot,
+      armorClass
     };
   }
 
@@ -166,7 +189,8 @@ export class ItemService {
     rarity: ItemRarity,
     damage: number,
     attackSpeed: number,
-    value: number
+    value: number,
+    weaponType: WeaponType = WeaponType.SWORD
   ): Weapon {
     return {
       id: crypto.randomUUID(),
@@ -176,7 +200,8 @@ export class ItemService {
       rarity,
       value,
       damage,
-      attackSpeed
+      attackSpeed,
+      weaponType
     };
   }
 

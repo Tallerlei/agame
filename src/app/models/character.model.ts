@@ -1,5 +1,5 @@
 import { Ability } from './ability.model';
-import { Item, Weapon, Armor, Trinket, Consumable } from './item.model';
+import { Item, Weapon, Armor, Trinket, Consumable, ItemType, WeaponType, ArmorClass } from './item.model';
 
 /**
  * Character class types with unique abilities
@@ -148,4 +148,49 @@ export function createCharacter(
     questsCompleted: 0,
     fightsWon: 0
   };
+}
+
+/**
+ * Get allowed weapon types for a character class
+ */
+export function getAllowedWeaponTypes(characterClass: CharacterClass): WeaponType[] {
+  switch (characterClass) {
+    case CharacterClass.WARRIOR: return [WeaponType.SWORD, WeaponType.AXE, WeaponType.MACE];
+    case CharacterClass.MAGE: return [WeaponType.STAFF];
+    case CharacterClass.ROGUE: return [WeaponType.DAGGER, WeaponType.BOW];
+    case CharacterClass.HEALER: return [WeaponType.STAFF, WeaponType.MACE];
+    default: return Object.values(WeaponType);
+  }
+}
+
+/**
+ * Get allowed armor classes for a character class
+ */
+export function getAllowedArmorClasses(characterClass: CharacterClass): ArmorClass[] {
+  switch (characterClass) {
+    case CharacterClass.WARRIOR: return [ArmorClass.HEAVY, ArmorClass.MEDIUM, ArmorClass.LIGHT];
+    case CharacterClass.MAGE: return [ArmorClass.LIGHT];
+    case CharacterClass.ROGUE: return [ArmorClass.LIGHT, ArmorClass.MEDIUM];
+    case CharacterClass.HEALER: return [ArmorClass.LIGHT, ArmorClass.MEDIUM];
+    default: return Object.values(ArmorClass);
+  }
+}
+
+/**
+ * Check if a character can equip a given item based on class restrictions
+ */
+export function canEquipItem(character: Character, item: Item): boolean {
+  if (item.type === ItemType.WEAPON) {
+    const weapon = item as Weapon;
+    return getAllowedWeaponTypes(character.characterClass).includes(weapon.weaponType);
+  }
+  if (item.type === ItemType.ARMOR) {
+    const armor = item as Armor;
+    return getAllowedArmorClasses(character.characterClass).includes(armor.armorClass);
+  }
+  if (item.type === ItemType.TRINKET) {
+    return true;
+  }
+  // Consumables and other item types cannot be equipped
+  return false;
 }

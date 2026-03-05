@@ -3,7 +3,8 @@ import {
   Character,
   CharacterClass,
   createCharacter,
-  calculateExpToNextLevel
+  calculateExpToNextLevel,
+  canEquipItem
 } from '../models/character.model';
 import { Ability, AbilityType, createBasicAttack } from '../models/ability.model';
 import { Item, Weapon, Armor, Trinket, ItemType } from '../models/item.model';
@@ -185,14 +186,22 @@ export class CharacterService {
   }
 
   /**
-   * Equip an item
+   * Equip an item. Returns false if the character cannot equip the item due to class restrictions.
    */
-  equipItem(characterId: string, itemId: string): void {
+  equipItem(characterId: string, itemId: string): boolean {
+    let success = false;
+
     this.updateCharacter(characterId, char => {
       const itemIndex = char.inventory.items.findIndex(i => i.id === itemId);
       if (itemIndex === -1) return char;
 
       const item = char.inventory.items[itemIndex];
+
+      if (!canEquipItem(char, item)) {
+        return char;
+      }
+
+      success = true;
       const newEquipment = { ...char.equipment };
       const newInventory = [...char.inventory.items];
       
@@ -225,6 +234,8 @@ export class CharacterService {
         inventory: { ...char.inventory, items: newInventory }
       };
     });
+
+    return success;
   }
 
   /**

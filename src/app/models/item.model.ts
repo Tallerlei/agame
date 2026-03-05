@@ -20,6 +20,27 @@ export enum ItemRarity {
 }
 
 /**
+ * Weapon types determining which character classes can wield them
+ */
+export enum WeaponType {
+  SWORD = 'SWORD',
+  AXE = 'AXE',
+  DAGGER = 'DAGGER',
+  STAFF = 'STAFF',
+  MACE = 'MACE',
+  BOW = 'BOW'
+}
+
+/**
+ * Armor classes determining which character classes can wear them
+ */
+export enum ArmorClass {
+  LIGHT = 'LIGHT',
+  MEDIUM = 'MEDIUM',
+  HEAVY = 'HEAVY'
+}
+
+/**
  * Base item interface
  */
 export interface Item {
@@ -38,6 +59,7 @@ export interface Weapon extends Item {
   type: ItemType.WEAPON;
   damage: number;
   attackSpeed: number;
+  weaponType: WeaponType;
 }
 
 /**
@@ -70,4 +92,5 @@ export interface Armor extends Item {
   type: ItemType.ARMOR;
   defense: number;
   slot: 'head' | 'chest' | 'legs' | 'feet';
+  armorClass: ArmorClass;
 }

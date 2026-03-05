@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
-import { Item, ItemType, ItemRarity } from '../../models/item.model';
+import { Item, ItemType, ItemRarity, Weapon, Armor, WeaponType, ArmorClass } from '../../models/item.model';
+import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../../models/character.model';
 
 @Component({
   selector: 'app-inventory',
@@ -117,14 +118,23 @@ import { Item, ItemType, ItemRarity } from '../../models/item.model';
           <div class="item-details">
             <h4 [class]="selectedItem.rarity.toLowerCase()">{{ selectedItem.name }}</h4>
             <p class="item-type">{{ selectedItem.type }} - {{ selectedItem.rarity }}</p>
+            @if (getItemRestrictionLabel(selectedItem)) {
+              <p class="item-restriction">{{ getItemRestrictionLabel(selectedItem) }}</p>
+            }
             <p class="item-desc">{{ selectedItem.description }}</p>
             <p class="item-value">💰 Value: {{ selectedItem.value }} gold</p>
             
             <div class="item-actions">
-              @if (canEquip(selectedItem)) {
-                <button class="equip-btn" (click)="equipItem()">
-                  Equip
-                </button>
+              @if (isEquippable(selectedItem)) {
+                @if (canEquip(selectedItem)) {
+                  <button class="equip-btn" (click)="equipItem()">
+                    Equip
+                  </button>
+                } @else {
+                  <button class="equip-btn disabled" disabled title="{{ getCannotEquipReason(selectedItem) }}">
+                    Cannot Equip
+                  </button>
+                }
               }
               @if (isConsumable(selectedItem)) {
                 <button class="use-btn" (click)="useItem()">
@@ -322,6 +332,19 @@ import { Item, ItemType, ItemRarity } from '../../models/item.model';
       color: white;
     }
 
+    .equip-btn.disabled {
+      background: #4a4a6a;
+      color: #8a8a8a;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .item-restriction {
+      color: #e74c3c;
+      font-size: 0.8rem;
+      margin: 0 0 0.5rem 0;
+    }
+
     .use-btn {
       background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
       color: white;
@@ -352,10 +375,46 @@ export class InventoryComponent {
     }
   }
 
-  canEquip(item: Item): boolean {
+  isEquippable(item: Item): boolean {
     return item.type === ItemType.WEAPON ||
            item.type === ItemType.ARMOR ||
            item.type === ItemType.TRINKET;
+  }
+
+  canEquip(item: Item): boolean {
+    const char = this.character();
+    if (!char) return false;
+    return canEquipItem(char, item);
+  }
+
+  getCannotEquipReason(item: Item): string {
+    const char = this.character();
+    if (!char) return '';
+    if (item.type === ItemType.WEAPON) {
+      const allowed = getAllowedWeaponTypes(char.characterClass)
+        .map(t => t.charAt(0) + t.slice(1).toLowerCase())
+        .join(', ');
+      return `${char.characterClass} can only equip: ${allowed}`;
+    }
+    if (item.type === ItemType.ARMOR) {
+      const allowed = getAllowedArmorClasses(char.characterClass)
+        .map(c => c.charAt(0) + c.slice(1).toLowerCase())
+        .join(', ');
+      return `${char.characterClass} can only wear: ${allowed} armor`;
+    }
+    return '';
+  }
+
+  getItemRestrictionLabel(item: Item): string {
+    if (item.type === ItemType.WEAPON) {
+      const weapon = item as Weapon;
+      return `Weapon Type: ${weapon.weaponType.charAt(0) + weapon.weaponType.slice(1).toLowerCase()}`;
+    }
+    if (item.type === ItemType.ARMOR) {
+      const armor = item as Armor;
+      return `Armor Class: ${armor.armorClass.charAt(0) + armor.armorClass.slice(1).toLowerCase()}`;
+    }
+    return '';
   }
 
   isConsumable(item: Item): boolean {
