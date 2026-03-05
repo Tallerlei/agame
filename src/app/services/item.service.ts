@@ -6,7 +6,8 @@ import {
   Weapon,
   Armor,
   Consumable,
-  Trinket
+  Trinket,
+  Bag
 } from '../models/item.model';
 
 @Injectable({
@@ -17,11 +18,18 @@ export class ItemService {
   private armorPrefixes = ['Iron', 'Steel', 'Bronze', 'Leather', 'Plate'];
   private consumableNames = ['Health Potion', 'Mana Potion', 'Elixir', 'Bandage'];
   private trinketNames = ['Ring', 'Amulet', 'Charm', 'Talisman'];
+  private bagNames = ['Pouch', 'Satchel', 'Backpack', 'Pack'];
 
   /**
    * Generate a random item based on level
    */
   generateRandomItem(level: number): Item {
+    // Bags are rarer drop candidates (10% chance)
+    const roll = Math.random();
+    if (roll < 0.1) {
+      const rarity = this.getRandomRarity(level);
+      return this.generateBag(level, rarity);
+    }
     const types = [ItemType.WEAPON, ItemType.ARMOR, ItemType.CONSUMABLE, ItemType.TRINKET];
     const type = types[Math.floor(Math.random() * types.length)];
     const rarity = this.getRandomRarity(level);
@@ -199,6 +207,26 @@ export class ItemService {
       rarity: config.rarity,
       value: config.value,
       healAmount: config.heal
+    };
+  }
+
+  /**
+   * Generate a bag that expands inventory capacity
+   */
+  generateBag(level: number, rarity: ItemRarity): Bag {
+    const baseName = this.bagNames[Math.floor(Math.random() * this.bagNames.length)];
+    const multiplier = this.getRarityMultiplier(rarity);
+    const baseSlots = 5;
+    const slotsGranted = Math.floor(baseSlots * multiplier);
+
+    return {
+      id: crypto.randomUUID(),
+      name: `${rarity} ${baseName}`,
+      description: `A ${rarity.toLowerCase()} quality ${baseName.toLowerCase()} with ${slotsGranted} extra slots`,
+      type: ItemType.BAG,
+      rarity,
+      value: Math.floor(12 * level * multiplier),
+      slotsGranted
     };
   }
 }

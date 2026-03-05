@@ -9,6 +9,7 @@ import {
   calculateDamage
 } from '../models/combat.model';
 import { Character } from '../models/character.model';
+import { calculateEncumbrance } from '../models/character.model';
 import { Ability, AbilityType } from '../models/ability.model';
 import { CharacterService, LevelUpInfo } from './character.service';
 import { ItemService } from './item.service';
@@ -85,19 +86,27 @@ export class CombatService {
       return;
     }
 
-    const damage = calculateDamage(
-      state.player.stats.attackPower + (state.player.equipment.weapon?.damage || 0),
-      state.enemy.defense
+    const rawAttack = state.player.stats.attackPower + (state.player.equipment.weapon?.damage || 0);
+    const encumbrance = calculateEncumbrance(
+      state.player.inventory.items.length,
+      state.player.stats.strength
     );
+    const encumbrancePenalty = Math.max(0, encumbrance - 0.5) * 0.5;
+    const effectiveAttack = Math.max(1, Math.floor(rawAttack * (1 - encumbrancePenalty)));
+
+    const damage = calculateDamage(effectiveAttack, state.enemy.defense);
 
     const newEnemyHealth = Math.max(0, state.enemy.currentHealth - damage);
+    const encumbranceNote = encumbrancePenalty > 0
+      ? ` (encumbered: -${Math.round(encumbrancePenalty * 100)}% ATK)`
+      : '';
     const logEntry: CombatLogEntry = {
       timestamp: Date.now(),
       attacker: state.player.name,
       defender: state.enemy.name,
       action: CombatActionType.ATTACK,
       damage,
-      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!`
+      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!${encumbranceNote}`
     };
 
     this._combatState.update(s => ({

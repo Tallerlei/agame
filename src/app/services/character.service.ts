@@ -6,7 +6,7 @@ import {
   calculateExpToNextLevel
 } from '../models/character.model';
 import { Ability, AbilityType, createBasicAttack } from '../models/ability.model';
-import { Item, Weapon, Armor, Trinket, ItemType } from '../models/item.model';
+import { Item, Weapon, Armor, Trinket, Bag, ItemType } from '../models/item.model';
 
 export interface LevelUpInfo {
   levelsGained: number;
@@ -217,12 +217,22 @@ export class CharacterService {
           newInventory.push(newEquipment.trinket);
         }
         newEquipment.trinket = item as Trinket;
+      } else if (item.type === ItemType.BAG) {
+        const bag = item as Bag;
+        if (newEquipment.bag) {
+          // Return old bag to inventory; maxSize will shrink but existing items are kept
+          newInventory.push(newEquipment.bag);
+        }
+        newEquipment.bag = bag;
       }
+
+      const BASE_INVENTORY_SIZE = 10;
+      const newMaxSize = BASE_INVENTORY_SIZE + (newEquipment.bag?.slotsGranted ?? 0);
 
       return {
         ...char,
         equipment: newEquipment,
-        inventory: { ...char.inventory, items: newInventory }
+        inventory: { ...char.inventory, items: newInventory, maxSize: newMaxSize }
       };
     });
   }
