@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
 import { Item, ItemType, ItemRarity, Weapon, Armor, Consumable, Trinket, Bag } from '../../models/item.model';
-import { calculateEncumbrance, canEquipItem } from '../../models/character.model';
+import { Character, calculateEncumbrance, canEquipItem } from '../../models/character.model';
 
 @Component({
   selector: 'app-inventory',
@@ -518,20 +518,14 @@ export class InventoryComponent {
     this.equipError = null;
   }
 
-  getFilteredItems(char: { characterClass: string; inventory: { items: Item[] }; stats: { strength: number } }): Item[] {
+  getFilteredItems(char: Character): Item[] {
     if (!this.filterCompatibleOnly) return char.inventory.items;
-    return char.inventory.items.filter(item => {
-      const character = this.character();
-      if (!character) return true;
-      return canEquipItem(character, item).canEquip;
-    });
+    return char.inventory.items.filter(item => canEquipItem(char, item).canEquip);
   }
 
-  isRestricted(char: { characterClass: string; stats: { strength: number }; inventory: { items: Item[] } }, item: Item): boolean {
-    const character = this.character();
-    if (!character) return false;
+  isRestricted(char: Character, item: Item): boolean {
     if (item.type !== ItemType.WEAPON && item.type !== ItemType.ARMOR) return false;
-    return !canEquipItem(character, item).canEquip;
+    return !canEquipItem(char, item).canEquip;
   }
 
   getClassRestrictionLabel(item: Item): string | null {
@@ -563,7 +557,7 @@ export class InventoryComponent {
     }
   }
 
-  canEquip(char: { characterClass: string; stats: { strength: number }; inventory: { items: Item[] } } | null, item: Item): boolean {
+  canEquip(char: Character | null, item: Item): boolean {
     if (!char) return false;
     if (item.type !== ItemType.WEAPON &&
         item.type !== ItemType.ARMOR &&
@@ -571,9 +565,7 @@ export class InventoryComponent {
         item.type !== ItemType.BAG) {
       return false;
     }
-    const character = this.character();
-    if (!character) return false;
-    return canEquipItem(character, item).canEquip;
+    return canEquipItem(char, item).canEquip;
   }
 
   isConsumable(item: Item): boolean {

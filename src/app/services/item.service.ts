@@ -143,7 +143,10 @@ export class ItemService {
     const isLegendary = rarity === ItemRarity.LEGENDARY;
     const classRestriction = isLegendary ? undefined : WEAPON_CLASS_RESTRICTION[weaponType];
 
-    // Stat bonus: +20 % of base damage for the primary stat
+    // Stat bonus: each weapon type boosts the primary stat tied to its restriction class.
+    // The bonus equals 20% of the scaled base damage so it grows proportionally with item power.
+    // (e.g. a Sword boosts Strength because Warriors wield Swords; a Staff boosts Intelligence
+    // because Mages / Healers wield Staves.)
     const bonusStat = WEAPON_STAT_BONUS_STAT[weaponType];
     const statBonus = bonusStat
       ? { [bonusStat]: Math.max(1, Math.floor(baseDamage * multiplier * 0.2)) }
