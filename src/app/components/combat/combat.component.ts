@@ -4,6 +4,7 @@ import { CombatService, CombatEndResult } from '../../services/combat.service';
 import { CharacterService } from '../../services/character.service';
 import { QuestService } from '../../services/quest.service';
 import { Ability, AbilityType } from '../../models/ability.model';
+import { ItemType, Consumable } from '../../models/item.model';
 
 @Component({
   selector: 'app-combat',
@@ -134,6 +135,21 @@ import { Ability, AbilityType } from '../../models/ability.model';
             <button class="action-btn flee" (click)="flee()">
               🏃 Flee
             </button>
+
+            @if (getConsumables().length > 0) {
+              <div class="consumables-row">
+                <span class="consumables-label">🎒 Items:</span>
+                @for (item of getConsumables(); track item.id) {
+                  <button
+                    class="action-btn consumable"
+                    (click)="useConsumable(item)"
+                    [title]="item.name + ': restores ' + item.healAmount + ' HP'"
+                  >
+                    🧪 {{ item.name }} (+{{ item.healAmount }} HP)
+                  </button>
+                }
+              </div>
+            }
           </div>
 
           <!-- Combat Log -->
@@ -177,6 +193,9 @@ import { Ability, AbilityType } from '../../models/ability.model';
     .action-btn.flee { background: linear-gradient(135deg, #f39c12, #d68910); color: white; }
     .action-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .cooldown { margin-left: 0.25rem; opacity: 0.7; }
+    .consumables-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; width: 100%; margin-top: 0.25rem; padding-top: 0.5rem; border-top: 1px solid #3a3a5a; }
+    .consumables-label { color: #a0a0a0; font-size: 0.85rem; white-space: nowrap; }
+    .action-btn.consumable { background: linear-gradient(135deg, #27ae60, #1e8449); color: white; font-size: 0.85rem; padding: 0.5rem 1rem; }
     .combat-log { background: #1a1a2e; border-radius: 8px; padding: 1rem; }
     .combat-log h4 { margin: 0 0 0.5rem; color: #ffd700; font-size: 0.9rem; }
     .log-entries { max-height: 150px; overflow-y: auto; }
@@ -251,6 +270,15 @@ export class CombatComponent {
 
   getUsableAbilities(): Ability[] {
     return this.combatState().player?.abilities.filter(a => a.id !== 'basic-attack') || [];
+  }
+
+  getConsumables(): Consumable[] {
+    const items = this.combatState().player?.inventory.items || [];
+    return items.filter((i): i is Consumable => i.type === ItemType.CONSUMABLE && (i as Consumable).healAmount != null);
+  }
+
+  useConsumable(item: Consumable): void {
+    this.combatService.useConsumable(item);
   }
 
   canUseAbility(ability: Ability): boolean {
