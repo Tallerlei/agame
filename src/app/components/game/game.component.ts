@@ -1,7 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
 import { CombatService } from '../../services/combat.service';
+import { SaveGameService } from '../../services/save-game.service';
 import { CharacterCreationComponent } from '../character-creation/character-creation.component';
 import { CharacterStatsComponent } from '../character-stats/character-stats.component';
 import { CombatComponent } from '../combat/combat.component';
@@ -26,6 +27,16 @@ type GameTab = 'combat' | 'quests' | 'inventory';
       <header class="game-header">
         <h1>⚔️ Epic Adventure ⚔️</h1>
         <p class="tagline">Fight. Explore. Become Legend.</p>
+        @if (hasCharacter()) {
+          <div class="save-controls">
+            <button class="save-btn" (click)="saveGame()" title="Save Game">
+              💾 Save
+            </button>
+            @if (saveMessage) {
+              <span class="save-msg" [class.error]="saveError">{{ saveMessage }}</span>
+            }
+          </div>
+        }
       </header>
 
       @if (!hasCharacter()) {
@@ -114,6 +125,39 @@ type GameTab = 'combat' | 'quests' | 'inventory';
       margin: 0.5rem 0 0 0;
     }
 
+    .save-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    .save-btn {
+      padding: 0.4rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      background: #2a2a4a;
+      color: #e0e0e0;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .save-btn:hover {
+      background: #3a4a5a;
+      color: #ffd700;
+    }
+
+    .save-msg {
+      color: #27ae60;
+      font-size: 0.8rem;
+    }
+
+    .save-msg.error {
+      color: #e74c3c;
+    }
+
     .game-layout {
       display: grid;
       grid-template-columns: 350px 1fr;
@@ -189,15 +233,55 @@ type GameTab = 'combat' | 'quests' | 'inventory';
     }
   `]
 })
-export class GameComponent {
+export class GameComponent implements OnInit {
   private characterService = inject(CharacterService);
   private combatService = inject(CombatService);
+  private saveGameService = inject(SaveGameService);
 
   activeTab: GameTab = 'combat';
   activeCharacter = this.characterService.activeCharacter;
+  saveMessage = '';
+  saveError = false;
+
+  private _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private autoSaveEffect = effect(() => {
+    // Debounced auto-save when character state changes (after initial load)
+    const char = this.characterService.activeCharacter();
+    if (char && this._initialized) {
+      if (this._autoSaveTimer) {
+        clearTimeout(this._autoSaveTimer);
+      }
+      this._autoSaveTimer = setTimeout(() => {
+        this.saveGameService.saveGame();
+      }, 1000);
+    }
+  });
+
+  private _initialized = false;
+
+  ngOnInit(): void {
+    // Try to load saved game on startup
+    if (this.saveGameService.hasSavedGame()) {
+      this.saveGameService.loadGame();
+    }
+    this._initialized = true;
+  }
 
   hasCharacter(): boolean {
     return this.characterService.characters().length > 0;
+  }
+
+  saveGame(): void {
+    const success = this.saveGameService.saveGame();
+    if (success) {
+      this.saveMessage = '✅ Saved!';
+      this.saveError = false;
+    } else {
+      this.saveMessage = '❌ Save failed';
+      this.saveError = true;
+    }
+    setTimeout(() => { this.saveMessage = ''; }, 2000);
   }
 
   setTab(tab: GameTab): void {

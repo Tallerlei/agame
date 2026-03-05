@@ -8,6 +8,16 @@ import {
 import { Ability, AbilityType, createBasicAttack } from '../models/ability.model';
 import { Item, Weapon, Armor, Trinket, ItemType } from '../models/item.model';
 
+export interface LevelUpInfo {
+  levelsGained: number;
+  oldLevel: number;
+  newLevel: number;
+  hpGained: number;
+  mpGained: number;
+  attackGained: number;
+  defenseGained: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -47,9 +57,11 @@ export class CharacterService {
   }
 
   /**
-   * Add experience to a character
+   * Add experience to a character. Returns LevelUpInfo if a level-up occurred, or null otherwise.
    */
-  addExperience(characterId: string, amount: number): void {
+  addExperience(characterId: string, amount: number): LevelUpInfo | null {
+    let levelUpInfo: LevelUpInfo | null = null;
+
     this._characters.update(chars =>
       chars.map(char => {
         if (char.id !== characterId) return char;
@@ -70,12 +82,27 @@ export class CharacterService {
         const newStats = { ...char.stats };
         
         if (levelUps > 0) {
-          newStats.maxHealth += 10 * levelUps;
+          const hpGained = 10 * levelUps;
+          const mpGained = 5 * levelUps;
+          const attackGained = 2 * levelUps;
+          const defenseGained = 1 * levelUps;
+
+          newStats.maxHealth += hpGained;
           newStats.currentHealth = newStats.maxHealth;
-          newStats.maxMana += 5 * levelUps;
+          newStats.maxMana += mpGained;
           newStats.currentMana = newStats.maxMana;
-          newStats.attackPower += 2 * levelUps;
-          newStats.defense += 1 * levelUps;
+          newStats.attackPower += attackGained;
+          newStats.defense += defenseGained;
+
+          levelUpInfo = {
+            levelsGained: levelUps,
+            oldLevel: char.level,
+            newLevel,
+            hpGained,
+            mpGained,
+            attackGained,
+            defenseGained
+          };
         }
 
         const updatedChar = {
@@ -94,6 +121,8 @@ export class CharacterService {
         return updatedChar;
       })
     );
+
+    return levelUpInfo;
   }
 
   /**
@@ -244,6 +273,25 @@ export class CharacterService {
         return updated;
       })
     );
+  }
+
+  /**
+   * Get serializable state for save game
+   */
+  getState(): { characters: Character[]; activeCharacterId: string | null } {
+    return {
+      characters: this._characters(),
+      activeCharacterId: this._activeCharacter()?.id ?? null
+    };
+  }
+
+  /**
+   * Load state from save game
+   */
+  loadState(characters: Character[], activeCharacterId: string | null): void {
+    this._characters.set(characters);
+    const active = characters.find(c => c.id === activeCharacterId) ?? null;
+    this._activeCharacter.set(active);
   }
 
   private getStartingAbilities(characterClass: CharacterClass): Ability[] {

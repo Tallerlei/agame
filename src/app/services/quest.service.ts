@@ -17,11 +17,15 @@ export class QuestService {
   private _activeQuest = signal<Quest | null>(null);
   private _completedQuests = signal<Quest[]>([]);
   private _pendingCompletion = signal<Quest | null>(null);
+  private _currentLocation = signal<string>('Town');
+  private _exploringLocation = signal<string | null>(null);
 
   availableQuests = this._availableQuests.asReadonly();
   activeQuest = this._activeQuest.asReadonly();
   completedQuests = this._completedQuests.asReadonly();
   pendingCompletion = this._pendingCompletion.asReadonly();
+  currentLocation = this._currentLocation.asReadonly();
+  exploringLocation = this._exploringLocation.asReadonly();
 
   constructor(private characterService: CharacterService) {
     this.generateInitialQuests();
@@ -34,20 +38,20 @@ export class QuestService {
     const quests: Quest[] = [
       this.createQuest('Goblin Menace', 'Defeat the goblins terrorizing the village', QuestDifficulty.EASY, 1, [
         { id: '1', type: ObjectiveType.DEFEAT_ENEMIES, description: 'Defeat 3 goblins', targetCount: 3, currentCount: 0, completed: false, targetEnemyType: 'Goblin' }
-      ]),
+      ], 'Village Outskirts'),
       this.createQuest('Dark Forest', 'Explore the mysterious dark forest', QuestDifficulty.MEDIUM, 3, [
         { id: '1', type: ObjectiveType.EXPLORE_LOCATION, description: 'Explore the forest', targetCount: 1, currentCount: 0, completed: false },
         { id: '2', type: ObjectiveType.DEFEAT_ENEMIES, description: 'Defeat forest creatures', targetCount: 5, currentCount: 0, completed: false }
-      ]),
+      ], 'Dark Forest'),
       this.createQuest('The Ancient Ruins', 'Investigate the ancient ruins', QuestDifficulty.HARD, 5, [
         { id: '1', type: ObjectiveType.EXPLORE_LOCATION, description: 'Find the ruins entrance', targetCount: 1, currentCount: 0, completed: false },
         { id: '2', type: ObjectiveType.COLLECT_ITEMS, description: 'Collect ancient artifacts', targetCount: 3, currentCount: 0, completed: false },
         { id: '3', type: ObjectiveType.BOSS_FIGHT, description: 'Defeat the Guardian', targetCount: 1, currentCount: 0, completed: false }
-      ]),
+      ], 'Ancient Ruins'),
       this.createQuest('Dragon\'s Lair', 'Confront the legendary dragon', QuestDifficulty.LEGENDARY, 10, [
         { id: '1', type: ObjectiveType.EXPLORE_LOCATION, description: 'Find the dragon\'s lair', targetCount: 1, currentCount: 0, completed: false },
         { id: '2', type: ObjectiveType.BOSS_FIGHT, description: 'Defeat the Dragon', targetCount: 1, currentCount: 0, completed: false }
-      ])
+      ], 'Dragon\'s Lair')
     ];
 
     this._availableQuests.set(quests);
@@ -61,7 +65,8 @@ export class QuestService {
     description: string,
     difficulty: QuestDifficulty,
     levelRequired: number,
-    objectives: QuestObjective[]
+    objectives: QuestObjective[],
+    location?: string
   ): Quest {
     const multiplier = getDifficultyMultiplier(difficulty);
     
@@ -76,7 +81,8 @@ export class QuestService {
         experience: Math.floor(100 * multiplier * levelRequired),
         gold: Math.floor(50 * multiplier * levelRequired)
       },
-      levelRequired
+      levelRequired,
+      location
     };
   }
 
@@ -93,6 +99,10 @@ export class QuestService {
 
     const activeQuest = { ...quest, status: QuestStatus.IN_PROGRESS };
     this._activeQuest.set(activeQuest);
+
+    if (quest.location) {
+      this._currentLocation.set(quest.location);
+    }
 
     this._availableQuests.update(quests =>
       quests.filter(q => q.id !== questId)
@@ -165,6 +175,7 @@ export class QuestService {
 
     this._completedQuests.update(quests => [quest, ...quests]);
     this._pendingCompletion.set(null);
+    this._currentLocation.set('Town');
 
     // Generate new quests
     this.generateNewQuest(character.level);
@@ -190,6 +201,7 @@ export class QuestService {
 
     this._availableQuests.update(quests => [...quests, resetQuest]);
     this._activeQuest.set(null);
+    this._currentLocation.set('Town');
   }
 
   /**
@@ -197,10 +209,10 @@ export class QuestService {
    */
   private generateNewQuest(playerLevel: number): void {
     const questTemplates = [
-      { name: 'Bandit Camp', description: 'Clear out the bandit camp', type: ObjectiveType.DEFEAT_ENEMIES, count: 4 },
-      { name: 'Lost Treasure', description: 'Find the hidden treasure', type: ObjectiveType.COLLECT_ITEMS, count: 2 },
-      { name: 'Monster Hunt', description: 'Hunt dangerous monsters', type: ObjectiveType.DEFEAT_ENEMIES, count: 6 },
-      { name: 'Mysterious Cave', description: 'Explore the cave system', type: ObjectiveType.EXPLORE_LOCATION, count: 1 }
+      { name: 'Bandit Camp', description: 'Clear out the bandit camp', type: ObjectiveType.DEFEAT_ENEMIES, count: 4, location: 'Bandit Camp' },
+      { name: 'Lost Treasure', description: 'Find the hidden treasure', type: ObjectiveType.COLLECT_ITEMS, count: 2, location: 'Treasure Cove' },
+      { name: 'Monster Hunt', description: 'Hunt dangerous monsters', type: ObjectiveType.DEFEAT_ENEMIES, count: 6, location: 'Wilderness' },
+      { name: 'Mysterious Cave', description: 'Explore the cave system', type: ObjectiveType.EXPLORE_LOCATION, count: 1, location: 'Mysterious Cave' }
     ];
 
     const template = questTemplates[Math.floor(Math.random() * questTemplates.length)];
@@ -213,10 +225,41 @@ export class QuestService {
       template.description,
       difficulty,
       levelReq,
-      [{ id: '1', type: template.type, description: template.description, targetCount: template.count, currentCount: 0, completed: false }]
+      [{ id: '1', type: template.type, description: template.description, targetCount: template.count, currentCount: 0, completed: false }],
+      template.location
     );
 
     this._availableQuests.update(quests => [...quests, newQuest]);
+  }
+
+  /**
+   * Start explore minigame for the current quest's explore objective
+   */
+  startExplore(): void {
+    const quest = this._activeQuest();
+    if (!quest) return;
+
+    const exploreObjective = quest.objectives.find(
+      obj => obj.type === ObjectiveType.EXPLORE_LOCATION && !obj.completed
+    );
+    if (!exploreObjective) return;
+
+    this._exploringLocation.set(quest.location ?? quest.name);
+  }
+
+  /**
+   * Complete the explore minigame — progress the explore objective
+   */
+  completeExplore(): void {
+    this._exploringLocation.set(null);
+    this.explore();
+  }
+
+  /**
+   * Cancel the explore minigame
+   */
+  cancelExplore(): void {
+    this._exploringLocation.set(null);
   }
 
   /**
@@ -254,5 +297,37 @@ export class QuestService {
     if (defeatObjective) {
       this.updateObjective(defeatObjective.id, 1);
     }
+  }
+
+  /**
+   * Get serializable state for save game
+   */
+  getState(): {
+    availableQuests: Quest[];
+    activeQuest: Quest | null;
+    completedQuests: Quest[];
+    currentLocation: string;
+  } {
+    return {
+      availableQuests: this._availableQuests(),
+      activeQuest: this._activeQuest(),
+      completedQuests: this._completedQuests(),
+      currentLocation: this._currentLocation()
+    };
+  }
+
+  /**
+   * Load state from save game
+   */
+  loadState(state: {
+    availableQuests: Quest[];
+    activeQuest: Quest | null;
+    completedQuests: Quest[];
+    currentLocation: string;
+  }): void {
+    this._availableQuests.set(state.availableQuests);
+    this._activeQuest.set(state.activeQuest);
+    this._completedQuests.set(state.completedQuests);
+    this._currentLocation.set(state.currentLocation);
   }
 }

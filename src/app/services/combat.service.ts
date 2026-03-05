@@ -10,8 +10,16 @@ import {
 } from '../models/combat.model';
 import { Character } from '../models/character.model';
 import { Ability, AbilityType } from '../models/ability.model';
-import { CharacterService } from './character.service';
+import { CharacterService, LevelUpInfo } from './character.service';
 import { ItemService } from './item.service';
+
+export interface CombatEndResult {
+  victory: boolean;
+  experienceGained: number;
+  goldGained: number;
+  itemsGained: string[];
+  levelUpInfo: LevelUpInfo | null;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -26,7 +34,10 @@ export class CombatService {
     turnCount: 0
   });
 
+  private _lastCombatResult = signal<CombatEndResult | null>(null);
+
   combatState = this._combatState.asReadonly();
+  lastCombatResult = this._lastCombatResult.asReadonly();
 
   constructor(
     private characterService: CharacterService,
@@ -283,14 +294,13 @@ export class CombatService {
     if (!state.player || !state.enemy) return;
 
     let message: string;
-    let result: CombatResult;
 
     if (victory) {
       const expGained = state.enemy.experienceReward;
       const goldGained = state.enemy.goldReward;
       
       // Update character with rewards
-      this.characterService.addExperience(state.player.id, expGained);
+      const levelUpInfo = this.characterService.addExperience(state.player.id, expGained);
       this.characterService.addGold(state.player.id, goldGained);
       this.characterService.incrementFightsWon(state.player.id);
 
@@ -309,20 +319,22 @@ export class CombatService {
         message += ` Found: ${droppedItems.join(', ')}`;
       }
 
-      result = {
+      this._lastCombatResult.set({
         victory: true,
         experienceGained: expGained,
         goldGained: goldGained,
-        itemsGained: droppedItems
-      };
+        itemsGained: droppedItems,
+        levelUpInfo
+      });
     } else {
       message = `Defeat! ${state.player.name} was defeated by ${state.enemy.name}!`;
-      result = {
+      this._lastCombatResult.set({
         victory: false,
         experienceGained: 0,
         goldGained: 0,
-        itemsGained: []
-      };
+        itemsGained: [],
+        levelUpInfo: null
+      });
     }
 
     const logEntry: CombatLogEntry = {
@@ -352,5 +364,13 @@ export class CombatService {
       combatLog: [],
       turnCount: 0
     });
+    this._lastCombatResult.set(null);
+  }
+
+  /**
+   * Dismiss the last combat result
+   */
+  dismissCombatResult(): void {
+    this._lastCombatResult.set(null);
   }
 }
