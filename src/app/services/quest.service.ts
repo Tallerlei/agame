@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import {
   Quest,
   QuestStatus,
@@ -14,16 +14,17 @@ import { CharacterService } from './character.service';
 })
 export class QuestService {
   private _availableQuests = signal<Quest[]>([]);
-  private _activeQuest = signal<Quest | null>(null);
+  private _activeQuests = signal<Quest[]>([]);
   private _completedQuests = signal<Quest[]>([]);
-  private _pendingCompletion = signal<Quest | null>(null);
+  private _pendingCompletions = signal<Quest[]>([]);
   private _currentLocation = signal<string>('Town');
   private _exploringLocation = signal<string | null>(null);
+  private _exploringQuestId = signal<string | null>(null);
 
   availableQuests = this._availableQuests.asReadonly();
-  activeQuest = this._activeQuest.asReadonly();
+  activeQuests = this._activeQuests.asReadonly();
   completedQuests = this._completedQuests.asReadonly();
-  pendingCompletion = this._pendingCompletion.asReadonly();
+  pendingCompletion = computed(() => this._pendingCompletions()[0] ?? null);
   currentLocation = this._currentLocation.asReadonly();
   exploringLocation = this._exploringLocation.asReadonly();
 
@@ -95,10 +96,9 @@ export class QuestService {
 
     if (!quest || !character) return false;
     if (character.level < quest.levelRequired) return false;
-    if (this._activeQuest()) return false; // Already on a quest
 
     const activeQuest = { ...quest, status: QuestStatus.IN_PROGRESS };
-    this._activeQuest.set(activeQuest);
+    this._activeQuests.update(quests => [...quests, activeQuest]);
 
     if (quest.location) {
       this._currentLocation.set(quest.location);
@@ -115,7 +115,9 @@ export class QuestService {
    * Update quest objective progress
    */
   updateObjective(objectiveId: string, progress: number = 1): void {
-    const quest = this._activeQuest();
+    const quest = this._activeQuests().find(q =>
+      q.objectives.some(obj => obj.id === objectiveId)
+    );
     if (!quest) return;
 
     const updatedObjectives = quest.objectives.map(obj => {
@@ -129,34 +131,34 @@ export class QuestService {
       };
     });
 
-    this._activeQuest.set({
-      ...quest,
-      objectives: updatedObjectives
-    });
+    const updatedQuest = { ...quest, objectives: updatedObjectives };
+    this._activeQuests.update(quests =>
+      quests.map(q => q.id === quest.id ? updatedQuest : q)
+    );
 
     // Check if all objectives are complete
     if (updatedObjectives.every(obj => obj.completed)) {
-      this.completeQuest();
+      this.completeQuestById(quest.id);
     }
   }
 
   /**
    * Complete the active quest — move it to pending completion so the player can claim rewards
    */
-  private completeQuest(): void {
-    const quest = this._activeQuest();
+  private completeQuestById(questId: string): void {
+    const quest = this._activeQuests().find(q => q.id === questId);
     if (!quest) return;
 
     const completedQuest = { ...quest, status: QuestStatus.COMPLETED };
-    this._activeQuest.set(null);
-    this._pendingCompletion.set(completedQuest);
+    this._activeQuests.update(quests => quests.filter(q => q.id !== questId));
+    this._pendingCompletions.update(pending => [...pending, completedQuest]);
   }
 
   /**
    * Claim the rewards for the pending completed quest
    */
   claimRewards(): void {
-    const quest = this._pendingCompletion();
+    const quest = this._pendingCompletions()[0];
     const character = this.characterService.activeCharacter();
 
     if (!quest || !character) return;
@@ -174,8 +176,12 @@ export class QuestService {
     }
 
     this._completedQuests.update(quests => [quest, ...quests]);
-    this._pendingCompletion.set(null);
-    this._currentLocation.set('Town');
+    this._pendingCompletions.update(pending => pending.slice(1));
+
+    // Reset location only if no more active quests
+    if (this._activeQuests().length === 0) {
+      this._currentLocation.set('Town');
+    }
 
     // Generate new quests
     this.generateNewQuest(character.level);
@@ -184,8 +190,8 @@ export class QuestService {
   /**
    * Abandon the current quest
    */
-  abandonQuest(): void {
-    const quest = this._activeQuest();
+  abandonQuest(questId: string): void {
+    const quest = this._activeQuests().find(q => q.id === questId);
     if (!quest) return;
 
     // Reset objectives and add back to available
@@ -200,8 +206,12 @@ export class QuestService {
     };
 
     this._availableQuests.update(quests => [...quests, resetQuest]);
-    this._activeQuest.set(null);
-    this._currentLocation.set('Town');
+    this._activeQuests.update(quests => quests.filter(q => q.id !== questId));
+
+    // Reset location only if no more active quests
+    if (this._activeQuests().length === 0) {
+      this._currentLocation.set('Town');
+    }
   }
 
   /**
@@ -210,7 +220,7 @@ export class QuestService {
   private generateNewQuest(playerLevel: number): void {
     const questTemplates = [
       { name: 'Bandit Camp', description: 'Clear out the bandit camp', type: ObjectiveType.DEFEAT_ENEMIES, count: 4, location: 'Bandit Camp' },
-      { name: 'Lost Treasure', description: 'Find the hidden treasure', type: ObjectiveType.COLLECT_ITEMS, count: 2, location: 'Treasure Cove' },
+      { name: 'Lost Treasure', description: 'Find the hidden treasure', type: ObjectiveType.EXPLORE_LOCATION, count: 2, location: 'Treasure Cove' },
       { name: 'Monster Hunt', description: 'Hunt dangerous monsters', type: ObjectiveType.DEFEAT_ENEMIES, count: 6, location: 'Wilderness' },
       { name: 'Mysterious Cave', description: 'Explore the cave system', type: ObjectiveType.EXPLORE_LOCATION, count: 1, location: 'Mysterious Cave' }
     ];
@@ -233,10 +243,10 @@ export class QuestService {
   }
 
   /**
-   * Start explore minigame for the current quest's explore objective
+   * Start explore minigame for the given quest's explore objective
    */
-  startExplore(): void {
-    const quest = this._activeQuest();
+  startExplore(questId: string): void {
+    const quest = this._activeQuests().find(q => q.id === questId);
     if (!quest) return;
 
     const exploreObjective = quest.objectives.find(
@@ -244,6 +254,7 @@ export class QuestService {
     );
     if (!exploreObjective) return;
 
+    this._exploringQuestId.set(questId);
     this._exploringLocation.set(quest.location ?? quest.name);
   }
 
@@ -251,8 +262,12 @@ export class QuestService {
    * Complete the explore minigame — progress the explore objective
    */
   completeExplore(): void {
+    const questId = this._exploringQuestId();
     this._exploringLocation.set(null);
-    this.explore();
+    this._exploringQuestId.set(null);
+    if (questId) {
+      this.exploreQuest(questId);
+    }
   }
 
   /**
@@ -260,16 +275,16 @@ export class QuestService {
    */
   cancelExplore(): void {
     this._exploringLocation.set(null);
+    this._exploringQuestId.set(null);
   }
 
   /**
-   * Simulate exploration progress
+   * Progress the exploration objective for the given quest
    */
-  explore(): void {
-    const quest = this._activeQuest();
+  private exploreQuest(questId: string): void {
+    const quest = this._activeQuests().find(q => q.id === questId);
     if (!quest) return;
 
-    // Find explore objectives and progress them
     const exploreObjective = quest.objectives.find(
       obj => obj.type === ObjectiveType.EXPLORE_LOCATION && !obj.completed
     );
@@ -283,19 +298,18 @@ export class QuestService {
    * Record enemy defeat for quest progress
    */
   recordEnemyDefeat(enemyName?: string): void {
-    const quest = this._activeQuest();
-    if (!quest) return;
+    for (const quest of this._activeQuests()) {
+      const defeatObjective = quest.objectives.find(
+        obj =>
+          obj.type === ObjectiveType.DEFEAT_ENEMIES &&
+          !obj.completed &&
+          (!obj.targetEnemyType ||
+            (enemyName && obj.targetEnemyType.toLowerCase() === enemyName.toLowerCase()))
+      );
 
-    const defeatObjective = quest.objectives.find(
-      obj =>
-        obj.type === ObjectiveType.DEFEAT_ENEMIES &&
-        !obj.completed &&
-        (!obj.targetEnemyType ||
-          (enemyName && obj.targetEnemyType.toLowerCase() === enemyName.toLowerCase()))
-    );
-
-    if (defeatObjective) {
-      this.updateObjective(defeatObjective.id, 1);
+      if (defeatObjective) {
+        this.updateObjective(defeatObjective.id, 1);
+      }
     }
   }
 
@@ -304,13 +318,13 @@ export class QuestService {
    */
   getState(): {
     availableQuests: Quest[];
-    activeQuest: Quest | null;
+    activeQuests: Quest[];
     completedQuests: Quest[];
     currentLocation: string;
   } {
     return {
       availableQuests: this._availableQuests(),
-      activeQuest: this._activeQuest(),
+      activeQuests: this._activeQuests(),
       completedQuests: this._completedQuests(),
       currentLocation: this._currentLocation()
     };
@@ -321,12 +335,19 @@ export class QuestService {
    */
   loadState(state: {
     availableQuests: Quest[];
-    activeQuest: Quest | null;
+    activeQuest?: Quest | null;
+    activeQuests?: Quest[];
     completedQuests: Quest[];
     currentLocation: string;
   }): void {
     this._availableQuests.set(state.availableQuests);
-    this._activeQuest.set(state.activeQuest);
+    if (state.activeQuests) {
+      this._activeQuests.set(state.activeQuests);
+    } else if (state.activeQuest) {
+      this._activeQuests.set([state.activeQuest]);
+    } else {
+      this._activeQuests.set([]);
+    }
     this._completedQuests.set(state.completedQuests);
     this._currentLocation.set(state.currentLocation);
   }
