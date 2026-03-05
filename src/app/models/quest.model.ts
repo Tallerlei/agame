@@ -40,6 +40,8 @@ export interface QuestObjective {
   currentCount: number;
   completed: boolean;
   targetEnemyType?: string; // For DEFEAT_ENEMIES objectives: restricts which enemy types count
+  targetBossName?: string;  // For BOSS_FIGHT objectives: the boss enemy name to spawn
+  targetItemName?: string;  // For COLLECT_ITEMS objectives: the quest item name that should drop
 }
 
 /**
@@ -64,6 +66,8 @@ export interface Quest {
   rewards: QuestReward;
   levelRequired: number;
   location?: string;
+  questEnemies?: string[];  // Enemy types that appear in this quest's location
+  combatCount?: number;     // Number of fights the player has had while on this quest
 }
 
 /**
@@ -81,5 +85,41 @@ export function getDifficultyMultiplier(difficulty: QuestDifficulty): number {
       return 5;
     default:
       return 1;
+  }
+}
+
+/**
+ * Get the minimum number of fights before a boss can spawn for this difficulty
+ */
+export function getBossSpawnThreshold(difficulty: QuestDifficulty): number {
+  switch (difficulty) {
+    case QuestDifficulty.EASY:
+      return 3;
+    case QuestDifficulty.MEDIUM:
+      return 5;
+    case QuestDifficulty.HARD:
+      return 8;
+    case QuestDifficulty.LEGENDARY:
+      return 10;
+    default:
+      return 5;
+  }
+}
+
+/**
+ * Get the number of fights before a quest item is guaranteed to drop
+ */
+export function getItemDropThreshold(difficulty: QuestDifficulty): number {
+  switch (difficulty) {
+    case QuestDifficulty.EASY:
+      return 3;
+    case QuestDifficulty.MEDIUM:
+      return 4;
+    case QuestDifficulty.HARD:
+      return 6;
+    case QuestDifficulty.LEGENDARY:
+      return 8;
+    default:
+      return 4;
   }
 }

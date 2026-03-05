@@ -2,7 +2,6 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CombatService, CombatEndResult } from '../../services/combat.service';
 import { CharacterService } from '../../services/character.service';
-import { QuestService } from '../../services/quest.service';
 import { Ability, AbilityType } from '../../models/ability.model';
 import { ItemType, Consumable } from '../../models/item.model';
 
@@ -19,6 +18,9 @@ import { ItemType, Consumable } from '../../models/item.model';
             <h2>{{ result.victory ? '⚔️ Victory!' : '💀 Defeat!' }}</h2>
 
             @if (result.victory) {
+              @if (result.isBossKill) {
+                <div class="boss-kill-banner">💀 Boss Vanquished!</div>
+              }
               <div class="rewards-summary">
                 <div class="reward-row">
                   <span>⭐ Experience:</span>
@@ -32,6 +34,12 @@ import { ItemType, Consumable } from '../../models/item.model';
                   <div class="reward-row">
                     <span>🎁 Items:</span>
                     <span class="reward-val">{{ result.itemsGained.join(', ') }}</span>
+                  </div>
+                }
+                @if (result.questItemsGained && result.questItemsGained.length > 0) {
+                  <div class="reward-row quest-item">
+                    <span>📦 Quest Item:</span>
+                    <span class="reward-val">{{ result.questItemsGained.join(', ') }}</span>
                   </div>
                 }
               </div>
@@ -72,7 +80,10 @@ import { ItemType, Consumable } from '../../models/item.model';
       } @else if (combatState().isActive) {
         <div class="combat-arena">
           <!-- Enemy Section -->
-          <div class="combatant enemy">
+          <div class="combatant enemy" [class.boss]="isBossEnemy()">
+            @if (isBossEnemy()) {
+              <span class="boss-badge">💀 BOSS</span>
+            }
             <h3>{{ combatState().enemy?.name }}</h3>
             <span class="level">Lv. {{ combatState().enemy?.level }}</span>
             <div class="health-bar">
@@ -176,6 +187,10 @@ import { ItemType, Consumable } from '../../models/item.model';
     .combat-arena { display: flex; flex-direction: column; gap: 1.5rem; }
     .combatant { padding: 1rem; border-radius: 8px; background: #2a2a4a; }
     .combatant.enemy { border-left: 4px solid #e74c3c; }
+    .combatant.enemy.boss { border-left: 4px solid #9b59b6; box-shadow: 0 0 15px rgba(155, 89, 182, 0.3); }
+    .boss-badge { display: inline-block; background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.25rem; }
+    .boss-kill-banner { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1.1rem; font-weight: bold; margin-bottom: 0.75rem; }
+    .reward-row.quest-item { background: rgba(155, 89, 182, 0.15); border-radius: 4px; padding: 0.35rem 0.5rem; }
     .combatant.player { border-left: 4px solid #3498db; }
     .combatant h3 { margin: 0 0 0.25rem; color: #fff; }
     .combatant .level { color: #ffd700; font-size: 0.85rem; }
@@ -226,10 +241,10 @@ import { ItemType, Consumable } from '../../models/item.model';
 export class CombatComponent {
   private combatService = inject(CombatService);
   private characterService = inject(CharacterService);
-  private questService = inject(QuestService);
 
   combatState = this.combatService.combatState;
   lastCombatResult = this.combatService.lastCombatResult;
+  isBossEnemy = this.combatService.currentEnemyIsBoss;
 
   canFight(): boolean {
     return this.characterService.activeCharacter() !== null;
@@ -244,12 +259,10 @@ export class CombatComponent {
 
   attack(): void {
     this.combatService.playerAttack();
-    this.checkVictory();
   }
 
   useAbility(ability: Ability): void {
     this.combatService.useAbility(ability);
-    this.checkVictory();
   }
 
   flee(): void {
@@ -258,14 +271,6 @@ export class CombatComponent {
 
   dismissResult(): void {
     this.combatService.dismissCombatResult();
-  }
-
-  private checkVictory(): void {
-    const state = this.combatState();
-    if (!state.isActive && state.enemy?.currentHealth === 0) {
-      // Record quest progress with the enemy name for type-specific objectives
-      this.questService.recordEnemyDefeat(state.enemy.name);
-    }
   }
 
   getUsableAbilities(): Ability[] {
