@@ -1,5 +1,5 @@
 import { Ability } from './ability.model';
-import { Item, Weapon, Armor, Trinket, Consumable, ItemType, WeaponType, ArmorClass } from './item.model';
+import { Item, Weapon, Armor, Trinket, Consumable, Bag, ItemType, WeaponType, ArmorClass } from './item.model';
 
 /**
  * Character class types with unique abilities
@@ -36,6 +36,7 @@ export interface Equipment {
   legs?: Armor;
   feet?: Armor;
   trinket?: Trinket;
+  bag?: Bag;
 }
 
 /**
@@ -127,6 +128,23 @@ export function calculateExpToNextLevel(level: number): number {
 }
 
 /**
+ * Calculate how many items a character can carry before penalties.
+ * Equals the character's strength stat.
+ */
+export function calculateCarryCapacity(strength: number): number {
+  return strength;
+}
+
+/**
+ * Calculate encumbrance ratio (0–1) based on items carried vs carry capacity.
+ * > 0.5 = minor attack penalty; > 0.75 = movement penalty + larger attack penalty.
+ */
+export function calculateEncumbrance(itemCount: number, strength: number): number {
+  const capacity = calculateCarryCapacity(strength);
+  return capacity > 0 ? Math.min(1, itemCount / capacity) : 1;
+}
+
+/**
  * Create a new character
  */
 export function createCharacter(
@@ -143,7 +161,7 @@ export function createCharacter(
     stats: createDefaultStats(characterClass),
     abilities: [],
     equipment: {},
-    inventory: { items: [], maxSize: 20 },
+    inventory: { items: [], maxSize: 10 },
     gold: 0,
     questsCompleted: 0,
     fightsWon: 0
@@ -189,6 +207,9 @@ export function canEquipItem(character: Character, item: Item): boolean {
     return getAllowedArmorClasses(character.characterClass).includes(armor.armorClass);
   }
   if (item.type === ItemType.TRINKET) {
+    return true;
+  }
+  if (item.type === ItemType.BAG) {
     return true;
   }
   // Consumables and other item types cannot be equipped

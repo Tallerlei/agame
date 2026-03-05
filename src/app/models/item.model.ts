@@ -5,7 +5,8 @@ export enum ItemType {
   WEAPON = 'WEAPON',
   CONSUMABLE = 'CONSUMABLE',
   TRINKET = 'TRINKET',
-  ARMOR = 'ARMOR'
+  ARMOR = 'ARMOR',
+  BAG = 'BAG'
 }
 
 /**
@@ -93,4 +94,12 @@ export interface Armor extends Item {
   defense: number;
   slot: 'head' | 'chest' | 'legs' | 'feet';
   armorClass: ArmorClass;
+}
+
+/**
+ * Bag item that expands inventory capacity
+ */
+export interface Bag extends Item {
+  type: ItemType.BAG;
+  slotsGranted: number;
 }

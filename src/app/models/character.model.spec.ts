@@ -68,7 +68,7 @@ describe('Character Model', () => {
       const character = createCharacter('TestHero', CharacterClass.MAGE);
       
       expect(character.inventory.items.length).toBe(0);
-      expect(character.inventory.maxSize).toBe(20);
+      expect(character.inventory.maxSize).toBe(10);
     });
 
     it('should initialize character with proper stats for class', () => {

@@ -4,6 +4,7 @@ import { QuestService } from '../../services/quest.service';
 import { CharacterService } from '../../services/character.service';
 import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models/quest.model';
 import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.component';
+import { calculateEncumbrance } from '../../models/character.model';
 
 @Component({
   selector: 'app-quest',
@@ -23,6 +24,7 @@ import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.c
         <div class="explore-overlay">
           <app-explore-minigame
             [locationName]="loc"
+            [encumbranceLevel]="currentEncumbrance()"
             (completed)="onExploreComplete()"
             (cancel)="onExploreCancel()"
           ></app-explore-minigame>
@@ -69,22 +71,23 @@ import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.c
         </div>
       }
 
-      <!-- Active Quest -->
-      @if (activeQuest()) {
+      <!-- Active Quests -->
+      @if (activeQuests().length > 0) {
         <div class="active-quest">
-          <h3>Active Quest</h3>
+          <h3>Active Quest{{ activeQuests().length > 1 ? 's' : '' }}</h3>
+          @for (quest of activeQuests(); track quest.id) {
           <div class="quest-card active">
             <div class="quest-header">
-              <span class="quest-name">{{ activeQuest()!.name }}</span>
-              <span class="difficulty" [class]="activeQuest()!.difficulty.toLowerCase()">
-                {{ activeQuest()!.difficulty }}
+              <span class="quest-name">{{ quest.name }}</span>
+              <span class="difficulty" [class]="quest.difficulty.toLowerCase()">
+                {{ quest.difficulty }}
               </span>
             </div>
-            <p class="quest-desc">{{ activeQuest()!.description }}</p>
+            <p class="quest-desc">{{ quest.description }}</p>
             
             <div class="objectives">
               <h4>Objectives:</h4>
-              @for (obj of activeQuest()!.objectives; track obj.id) {
+              @for (obj of quest.objectives; track obj.id) {
                 <div class="objective" [class.completed]="obj.completed">
                   <span class="check">{{ obj.completed ? '✅' : '⬜' }}</span>
                   <span>{{ obj.description }}</span>
@@ -94,24 +97,25 @@ import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.c
             </div>
 
             <div class="quest-rewards">
-              <span>💰 {{ activeQuest()!.rewards.gold }} gold</span>
-              <span>⭐ {{ activeQuest()!.rewards.experience }} XP</span>
+              <span>💰 {{ quest.rewards.gold }} gold</span>
+              <span>⭐ {{ quest.rewards.experience }} XP</span>
             </div>
 
             <div class="quest-actions">
               <button
                 class="explore-btn"
-                [disabled]="!hasExploreObjective()"
-                [title]="hasExploreObjective() ? 'Explore to progress location objective' : 'No exploration objective for this quest'"
-                (click)="startExplore()"
+                [disabled]="!hasExploreObjective(quest)"
+                [title]="hasExploreObjective(quest) ? 'Explore to progress location objective' : 'No exploration objective for this quest'"
+                (click)="startExplore(quest.id)"
               >
                 🧭 Explore
               </button>
-              <button class="abandon-btn" (click)="abandonQuest()">
+              <button class="abandon-btn" (click)="abandonQuest(quest.id)">
                 ❌ Abandon
               </button>
             </div>
           </div>
+          }
         </div>
       }
 
@@ -119,7 +123,7 @@ import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.c
       <div class="available-quests">
         <h3>Available Quests</h3>
         @if (availableQuests().length === 0) {
-          <p class="no-quests">No quests available. Complete your current quest!</p>
+          <p class="no-quests">No quests available. Check back after completing a quest!</p>
         } @else {
           <div class="quest-list">
             @for (quest of availableQuests(); track quest.id) {
@@ -539,17 +543,22 @@ export class QuestComponent {
   private characterService = inject(CharacterService);
 
   availableQuests = this.questService.availableQuests;
-  activeQuest = this.questService.activeQuest;
+  activeQuests = this.questService.activeQuests;
   completedQuests = this.questService.completedQuests;
   pendingCompletion = this.questService.pendingCompletion;
   currentLocation = this.questService.currentLocation;
   exploringLocation = this.questService.exploringLocation;
 
+  currentEncumbrance(): number {
+    const char = this.characterService.activeCharacter();
+    if (!char) return 0;
+    return calculateEncumbrance(char.inventory.items.length, char.stats.strength);
+  }
+
   canAcceptQuest(quest: Quest): boolean {
     const character = this.characterService.activeCharacter();
     if (!character) return false;
-    if (this.activeQuest()) return false;
-    if (this.pendingCompletion()) return false;
+    if (this.activeQuests().some(q => q.id === quest.id)) return false;
     return character.level >= quest.levelRequired;
   }
 
@@ -560,12 +569,12 @@ export class QuestComponent {
     }
   }
 
-  abandonQuest(): void {
-    this.questService.abandonQuest();
+  abandonQuest(questId: string): void {
+    this.questService.abandonQuest(questId);
   }
 
-  startExplore(): void {
-    this.questService.startExplore();
+  startExplore(questId: string): void {
+    this.questService.startExplore(questId);
   }
 
   onExploreComplete(): void {
@@ -580,9 +589,7 @@ export class QuestComponent {
     this.questService.claimRewards();
   }
 
-  hasExploreObjective(): boolean {
-    const quest = this.activeQuest();
-    if (!quest) return false;
+  hasExploreObjective(quest: Quest): boolean {
     return quest.objectives.some(
       obj => obj.type === ObjectiveType.EXPLORE_LOCATION && !obj.completed
     );

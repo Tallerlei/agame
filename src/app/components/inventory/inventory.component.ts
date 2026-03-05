@@ -1,8 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
-import { Item, ItemType, ItemRarity, Weapon, Armor, WeaponType, ArmorClass } from '../../models/item.model';
-import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../../models/character.model';
+import { Item, ItemType, ItemRarity, Weapon, Armor, WeaponType, ArmorClass, Consumable, Trinket, Bag } from '../../models/item.model';
+import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses, calculateEncumbrance } from '../../models/character.model';
 
 @Component({
   selector: 'app-inventory',
@@ -13,6 +13,28 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       <h2>🎒 Inventory</h2>
 
       @if (character(); as char) {
+        <!-- Encumbrance Bar -->
+        @let enc = getEncumbrance(char);
+        <div class="encumbrance-section">
+          <div class="enc-header">
+            <span class="enc-label">⚖️ Burden: {{ char.inventory.items.length }} / {{ char.stats.strength }}</span>
+            <span class="enc-status" [class.enc-ok]="enc <= 0.5" [class.enc-warn]="enc > 0.5 && enc <= 0.75" [class.enc-heavy]="enc > 0.75">
+              {{ enc <= 0.5 ? 'Normal' : enc <= 0.75 ? 'Encumbered' : 'Heavily Encumbered' }}
+            </span>
+          </div>
+          <div class="enc-bar-bg">
+            <div class="enc-bar-fill"
+              [style.width.%]="enc * 100"
+              [class.enc-fill-ok]="enc <= 0.5"
+              [class.enc-fill-warn]="enc > 0.5 && enc <= 0.75"
+              [class.enc-fill-heavy]="enc > 0.75">
+            </div>
+          </div>
+          @if (enc > 0.5) {
+            <p class="enc-note">{{ enc > 0.75 ? '⚠️ Physical attacks -' + getAttackPenaltyPct(enc) + '% & movement slowed' : '🔶 Physical attacks -' + getAttackPenaltyPct(enc) + '%' }}</p>
+          }
+        </div>
+
         <!-- Equipment Section -->
         <div class="equipment-section">
           <h3>Equipment</h3>
@@ -22,7 +44,7 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
               @if (char.equipment.weapon) {
                 <div class="item" [class]="char.equipment.weapon.rarity.toLowerCase()">
                   ⚔️ {{ char.equipment.weapon.name }}
-                  <span class="stat">+{{ char.equipment.weapon.damage }} DMG</span>
+                  <span class="stat">+{{ char.equipment.weapon.damage }} DMG | {{ char.equipment.weapon.attackSpeed | number:'1.1-1' }}x SPD</span>
                 </div>
               } @else {
                 <div class="empty">Empty</div>
@@ -82,6 +104,19 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
               @if (char.equipment.trinket) {
                 <div class="item" [class]="char.equipment.trinket.rarity.toLowerCase()">
                   💎 {{ char.equipment.trinket.name }}
+                  <span class="stat">{{ getTrinketStatLine(char.equipment.trinket) }}</span>
+                </div>
+              } @else {
+                <div class="empty">Empty</div>
+              }
+            </div>
+
+            <div class="slot" [class.filled]="char.equipment.bag">
+              <span class="slot-label">Bag</span>
+              @if (char.equipment.bag) {
+                <div class="item" [class]="char.equipment.bag.rarity.toLowerCase()">
+                  🎒 {{ char.equipment.bag.name }}
+                  <span class="stat">+{{ char.equipment.bag.slotsGranted }} slots</span>
                 </div>
               } @else {
                 <div class="empty">Empty</div>
@@ -107,6 +142,7 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
                 >
                   <span class="item-icon">{{ getItemIcon(item) }}</span>
                   <span class="item-name">{{ item.name }}</span>
+                  <span class="item-stat-line">{{ getItemStatLine(item) }}</span>
                 </div>
               }
             </div>
@@ -122,6 +158,9 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
               <p class="item-restriction">{{ getItemRestrictionLabel(selectedItem) }}</p>
             }
             <p class="item-desc">{{ selectedItem.description }}</p>
+            <div class="item-stats-block">
+              {{ getItemFullStats(selectedItem) }}
+            </div>
             <p class="item-value">💰 Value: {{ selectedItem.value }} gold</p>
             
             <div class="item-actions">
@@ -141,6 +180,9 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
                   Use
                 </button>
               }
+              <button class="drop-btn" (click)="dropItem()">
+                🗑️ Drop
+              </button>
             </div>
           </div>
         }
@@ -165,6 +207,45 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       margin: 0 0 1rem 0;
       font-size: 1rem;
     }
+
+    .encumbrance-section {
+      background: #2a2a4a;
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .enc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+
+    .enc-label { color: #e0e0e0; font-size: 0.85rem; }
+    .enc-status { font-size: 0.75rem; font-weight: bold; padding: 0.1rem 0.5rem; border-radius: 8px; }
+    .enc-ok { color: #27ae60; }
+    .enc-warn { color: #f39c12; }
+    .enc-heavy { color: #e74c3c; }
+
+    .enc-bar-bg {
+      background: #1a1a2e;
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .enc-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .enc-fill-ok { background: #27ae60; }
+    .enc-fill-warn { background: #f39c12; }
+    .enc-fill-heavy { background: #e74c3c; }
+
+    .enc-note { color: #a0a0a0; font-size: 0.75rem; margin: 0.3rem 0 0; }
 
     .equipment-section {
       margin-bottom: 2rem;
@@ -239,7 +320,7 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       justify-content: center;
       cursor: pointer;
       transition: all 0.2s;
-      padding: 0.5rem;
+      padding: 0.4rem;
     }
 
     .inventory-item:hover {
@@ -253,17 +334,27 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
     }
 
     .item-icon {
-      font-size: 1.5rem;
+      font-size: 1.3rem;
     }
 
     .item-name {
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       color: #a0a0a0;
       text-align: center;
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      width: 100%;
+    }
+
+    .item-stat-line {
+      font-size: 0.6rem;
+      color: #27ae60;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       width: 100%;
     }
 
@@ -306,10 +397,19 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       margin: 0 0 0.5rem 0;
     }
 
+    .item-stats-block {
+      color: #27ae60;
+      font-size: 0.9rem;
+      margin: 0 0 0.5rem 0;
+      padding: 0.4rem 0.6rem;
+      background: #1a1a2e;
+      border-radius: 4px;
+    }
+
     .item-value {
       color: #ffd700;
       font-size: 0.9rem;
-      margin: 0 0 1rem 0;
+      margin: 0.5rem 0 1rem 0;
     }
 
     .item-actions {
@@ -317,7 +417,7 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       gap: 0.5rem;
     }
 
-    .equip-btn, .use-btn {
+    .equip-btn, .use-btn, .drop-btn {
       flex: 1;
       padding: 0.75rem;
       border: none;
@@ -350,8 +450,17 @@ import { canEquipItem, getAllowedWeaponTypes, getAllowedArmorClasses } from '../
       color: white;
     }
 
-    .equip-btn:hover, .use-btn:hover {
+    .drop-btn {
+      background: linear-gradient(135deg, #7f8c8d 0%, #5d6d7e 100%);
+      color: white;
+    }
+
+    .equip-btn:hover, .use-btn:hover, .drop-btn:hover {
       transform: translateY(-2px);
+    }
+
+    .drop-btn:hover {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
     }
   `]
 })
@@ -371,6 +480,7 @@ export class InventoryComponent {
       case ItemType.ARMOR: return '🛡️';
       case ItemType.CONSUMABLE: return '🧪';
       case ItemType.TRINKET: return '💎';
+      case ItemType.BAG: return '🎒';
       default: return '📦';
     }
   }
@@ -378,7 +488,8 @@ export class InventoryComponent {
   isEquippable(item: Item): boolean {
     return item.type === ItemType.WEAPON ||
            item.type === ItemType.ARMOR ||
-           item.type === ItemType.TRINKET;
+           item.type === ItemType.TRINKET ||
+           item.type === ItemType.BAG;
   }
 
   canEquip(item: Item): boolean {
@@ -433,14 +544,102 @@ export class InventoryComponent {
     const char = this.character();
     if (!char || !this.selectedItem || this.selectedItem.type !== ItemType.CONSUMABLE) return;
 
-    // Get heal amount from consumable
-    const consumable = this.selectedItem as { healAmount?: number };
+    const consumable = this.selectedItem as Consumable;
     if (consumable.healAmount) {
       this.characterService.healCharacter(char.id, consumable.healAmount);
     }
 
-    // Remove item from inventory after use
     this.characterService.removeItemFromInventory(char.id, this.selectedItem.id);
     this.selectedItem = null;
+  }
+
+  dropItem(): void {
+    const char = this.character();
+    if (!char || !this.selectedItem) return;
+
+    this.characterService.removeItemFromInventory(char.id, this.selectedItem.id);
+    this.selectedItem = null;
+  }
+
+  getEncumbrance(char: { inventory: { items: unknown[] }; stats: { strength: number } }): number {
+    return calculateEncumbrance(char.inventory.items.length, char.stats.strength);
+  }
+
+  getAttackPenaltyPct(enc: number): number {
+    return Math.round(Math.max(0, enc - 0.5) * 0.5 * 100);
+  }
+
+  getItemStatLine(item: Item): string {
+    switch (item.type) {
+      case ItemType.WEAPON: {
+        const w = item as Weapon;
+        return `+${w.damage} DMG`;
+      }
+      case ItemType.ARMOR: {
+        const a = item as Armor;
+        return `+${a.defense} DEF`;
+      }
+      case ItemType.CONSUMABLE: {
+        const c = item as Consumable;
+        return c.healAmount ? `+${c.healAmount} HP` : '';
+      }
+      case ItemType.TRINKET: {
+        const t = item as Trinket;
+        const bonus = t.statBonus;
+        const parts: string[] = [];
+        if (bonus.strength) parts.push(`+${bonus.strength} STR`);
+        if (bonus.agility) parts.push(`+${bonus.agility} AGI`);
+        if (bonus.intelligence) parts.push(`+${bonus.intelligence} INT`);
+        if (bonus.health) parts.push(`+${bonus.health} HP`);
+        return parts.join(' ');
+      }
+      case ItemType.BAG: {
+        const b = item as Bag;
+        return `+${b.slotsGranted} slots`;
+      }
+      default: return '';
+    }
+  }
+
+  getItemFullStats(item: Item): string {
+    switch (item.type) {
+      case ItemType.WEAPON: {
+        const w = item as Weapon;
+        return `⚔️ Damage: ${w.damage}  ⚡ Speed: ${w.attackSpeed.toFixed(1)}x`;
+      }
+      case ItemType.ARMOR: {
+        const a = item as Armor;
+        return `🛡️ Defense: ${a.defense}  📍 Slot: ${a.slot}`;
+      }
+      case ItemType.CONSUMABLE: {
+        const c = item as Consumable;
+        return c.healAmount ? `❤️ Heals: ${c.healAmount} HP` : 'No active stats';
+      }
+      case ItemType.TRINKET: {
+        const t = item as Trinket;
+        const bonus = t.statBonus;
+        const parts: string[] = [];
+        if (bonus.strength) parts.push(`💪 STR +${bonus.strength}`);
+        if (bonus.agility) parts.push(`🏃 AGI +${bonus.agility}`);
+        if (bonus.intelligence) parts.push(`🧠 INT +${bonus.intelligence}`);
+        if (bonus.health) parts.push(`❤️ HP +${bonus.health}`);
+        return parts.join('  ') || 'No stat bonuses';
+      }
+      case ItemType.BAG: {
+        const b = item as Bag;
+        return `🎒 Inventory slots: +${b.slotsGranted}`;
+      }
+      default: return '';
+    }
+  }
+
+  getTrinketStatLine(trinket: Trinket): string {
+    const bonus = trinket.statBonus;
+    const parts: string[] = [];
+    if (bonus.strength) parts.push(`+${bonus.strength} STR`);
+    if (bonus.agility) parts.push(`+${bonus.agility} AGI`);
+    if (bonus.intelligence) parts.push(`+${bonus.intelligence} INT`);
+    if (bonus.health) parts.push(`+${bonus.health} HP`);
+    return parts.join(' ') || 'No bonus';
   }
 }

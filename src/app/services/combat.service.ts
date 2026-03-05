@@ -9,7 +9,9 @@ import {
   calculateDamage
 } from '../models/combat.model';
 import { Character } from '../models/character.model';
+import { calculateEncumbrance } from '../models/character.model';
 import { Ability, AbilityType } from '../models/ability.model';
+import { Consumable, ItemType } from '../models/item.model';
 import { CharacterService, LevelUpInfo } from './character.service';
 import { ItemService } from './item.service';
 
@@ -85,19 +87,27 @@ export class CombatService {
       return;
     }
 
-    const damage = calculateDamage(
-      state.player.stats.attackPower + (state.player.equipment.weapon?.damage || 0),
-      state.enemy.defense
+    const rawAttack = state.player.stats.attackPower + (state.player.equipment.weapon?.damage || 0);
+    const encumbrance = calculateEncumbrance(
+      state.player.inventory.items.length,
+      state.player.stats.strength
     );
+    const encumbrancePenalty = Math.max(0, encumbrance - 0.5) * 0.5;
+    const effectiveAttack = Math.max(1, Math.floor(rawAttack * (1 - encumbrancePenalty)));
+
+    const damage = calculateDamage(effectiveAttack, state.enemy.defense);
 
     const newEnemyHealth = Math.max(0, state.enemy.currentHealth - damage);
+    const encumbranceNote = encumbrancePenalty > 0
+      ? ` (encumbered: -${Math.round(encumbrancePenalty * 100)}% ATK)`
+      : '';
     const logEntry: CombatLogEntry = {
       timestamp: Date.now(),
       attacker: state.player.name,
       defender: state.enemy.name,
       action: CombatActionType.ATTACK,
       damage,
-      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!`
+      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!${encumbranceNote}`
     };
 
     this._combatState.update(s => ({
@@ -189,6 +199,55 @@ export class CombatService {
     } else {
       setTimeout(() => this.enemyTurn(), 500);
     }
+  }
+
+  /**
+   * Player uses a consumable item from inventory
+   */
+  useConsumable(item: Consumable): void {
+    const state = this._combatState();
+    if (!state.isActive || state.currentTurn !== 'player' || !state.player) {
+      return;
+    }
+
+    if (item.type !== ItemType.CONSUMABLE || !item.healAmount) {
+      return;
+    }
+
+    const healing = item.healAmount;
+    const playerId = state.player.id;
+    const playerName = state.player.name;
+    const newHealth = Math.min(
+      state.player.stats.maxHealth,
+      state.player.stats.currentHealth + healing
+    );
+
+    const logEntry: CombatLogEntry = {
+      timestamp: Date.now(),
+      attacker: playerName,
+      defender: playerName,
+      action: CombatActionType.USE_ITEM,
+      healing,
+      message: `${playerName} uses ${item.name} and recovers ${healing} HP!`
+    };
+
+    const updatedInventoryItems = state.player.inventory.items.filter(i => i.id !== item.id);
+
+    this._combatState.update(s => ({
+      ...s,
+      player: s.player ? {
+        ...s.player,
+        stats: { ...s.player.stats, currentHealth: newHealth },
+        inventory: { ...s.player.inventory, items: updatedInventoryItems }
+      } : null,
+      combatLog: [...s.combatLog, logEntry],
+      currentTurn: 'enemy' as const
+    }));
+
+    // Remove item from character service so it persists after combat
+    this.characterService.removeItemFromInventory(playerId, item.id);
+
+    setTimeout(() => this.enemyTurn(), 500);
   }
 
   /**
