@@ -18,6 +18,11 @@ interface GridCell {
         <h3>🧭 Exploration</h3>
         <p class="location-name">📍 {{ locationName }}</p>
         <p class="hint">Find the objective! Use the arrows or click adjacent tiles to move.</p>
+        @if (encumbranceLevel > 0.75) {
+          <p class="encumbrance-warn">⚠️ Heavily encumbered – movement slowed!</p>
+        } @else if (encumbranceLevel > 0.5) {
+          <p class="encumbrance-note">🎒 Encumbered – movement slightly hindered.</p>
+        }
         <div class="steps-counter">Steps: {{ steps }}</div>
       </div>
 
@@ -68,7 +73,9 @@ interface GridCell {
     .explore-container { background: linear-gradient(135deg, #0d1b2a, #1b2838); border: 2px solid #3498db; border-radius: 12px; padding: 1.5rem; text-align: center; }
     .explore-header h3 { color: #3498db; margin: 0 0 0.25rem; }
     .location-name { color: #ffd700; font-weight: bold; margin: 0 0 0.25rem; font-size: 1rem; }
-    .hint { color: #a0a0a0; font-size: 0.8rem; margin: 0 0 0.5rem; }
+    .hint { color: #a0a0a0; font-size: 0.8rem; margin: 0 0 0.25rem; }
+    .encumbrance-warn { color: #e74c3c; font-size: 0.8rem; margin: 0 0 0.25rem; font-weight: bold; }
+    .encumbrance-note { color: #f39c12; font-size: 0.8rem; margin: 0 0 0.25rem; }
     .steps-counter { color: #e0e0e0; font-size: 0.85rem; margin-bottom: 0.75rem; }
     .grid { display: grid; gap: 2px; max-width: 320px; margin: 0 auto 1rem; }
     .cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #1a1a2e; border-radius: 4px; font-size: 1.2rem; cursor: default; transition: background 0.2s; border: 1px solid #2a2a4a; }
@@ -93,6 +100,7 @@ interface GridCell {
 export class ExploreMinigameComponent implements OnInit {
   @Input() locationName = 'Unknown Location';
   @Input() gridSize = 6;
+  @Input() encumbranceLevel = 0;
   @Output() completed = new EventEmitter<void>();
   @Output() cancel = new EventEmitter<void>();
 
@@ -102,6 +110,7 @@ export class ExploreMinigameComponent implements OnInit {
   targetRow = 0;
   targetCol = 0;
   steps = 0;
+  movesBlocked = 0;
 
   private static readonly OBSTACLE_DENSITY = 0.15;
   private static readonly MIN_TARGET_DISTANCE_FACTOR = 0.5;
@@ -188,6 +197,14 @@ export class ExploreMinigameComponent implements OnInit {
   }
 
   private moveTo(row: number, col: number): void {
+    // Movement penalty: when heavily encumbered (>0.75), every other move attempt
+    // is blocked (costs a step without moving). First move always succeeds.
+    if (this.encumbranceLevel > 0.75 && this.movesBlocked % 2 === 1) {
+      this.movesBlocked++;
+      this.steps++; // costs an extra step but no actual movement
+      return;
+    }
+    this.movesBlocked++;
     this.playerRow = row;
     this.playerCol = col;
     this.steps++;

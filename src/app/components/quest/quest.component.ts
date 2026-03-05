@@ -4,6 +4,7 @@ import { QuestService } from '../../services/quest.service';
 import { CharacterService } from '../../services/character.service';
 import { Quest, QuestDifficulty, QuestStatus, ObjectiveType } from '../../models/quest.model';
 import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.component';
+import { calculateEncumbrance } from '../../models/character.model';
 
 @Component({
   selector: 'app-quest',
@@ -23,6 +24,7 @@ import { ExploreMinigameComponent } from '../explore-minigame/explore-minigame.c
         <div class="explore-overlay">
           <app-explore-minigame
             [locationName]="loc"
+            [encumbranceLevel]="currentEncumbrance()"
             (completed)="onExploreComplete()"
             (cancel)="onExploreCancel()"
           ></app-explore-minigame>
@@ -544,6 +546,12 @@ export class QuestComponent {
   pendingCompletion = this.questService.pendingCompletion;
   currentLocation = this.questService.currentLocation;
   exploringLocation = this.questService.exploringLocation;
+
+  currentEncumbrance(): number {
+    const char = this.characterService.activeCharacter();
+    if (!char) return 0;
+    return calculateEncumbrance(char.inventory.items.length, char.stats.strength);
+  }
 
   canAcceptQuest(quest: Quest): boolean {
     const character = this.characterService.activeCharacter();
