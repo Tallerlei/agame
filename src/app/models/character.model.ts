@@ -1,5 +1,5 @@
 import { Ability } from './ability.model';
-import { Item, Weapon, Armor, Trinket, Consumable, Bag } from './item.model';
+import { Item, Weapon, Armor, Trinket, Consumable, Bag, ItemType, WeaponType, ArmorClass } from './item.model';
 
 /**
  * Character class types with unique abilities
@@ -166,4 +166,74 @@ export function createCharacter(
     questsCompleted: 0,
     fightsWon: 0
   };
+}
+
+/**
+ * Weapon types each class is allowed to wield (O(1) lookup via Set).
+ */
+const CLASS_ALLOWED_WEAPON_TYPES: Record<CharacterClass, Set<WeaponType>> = {
+  [CharacterClass.WARRIOR]: new Set([WeaponType.SWORD, WeaponType.AXE, WeaponType.MACE]),
+  [CharacterClass.MAGE]:    new Set([WeaponType.STAFF]),
+  [CharacterClass.ROGUE]:   new Set([WeaponType.DAGGER, WeaponType.BOW]),
+  [CharacterClass.HEALER]:  new Set([WeaponType.STAFF, WeaponType.MACE])
+};
+
+/**
+ * Armor weight classes each class is allowed to wear (O(1) lookup via Set).
+ */
+const CLASS_ALLOWED_ARMOR_CLASSES: Record<CharacterClass, Set<ArmorClass>> = {
+  [CharacterClass.WARRIOR]: new Set([ArmorClass.HEAVY, ArmorClass.MEDIUM, ArmorClass.LIGHT]),
+  [CharacterClass.MAGE]:    new Set([ArmorClass.LIGHT]),
+  [CharacterClass.ROGUE]:   new Set([ArmorClass.LIGHT, ArmorClass.MEDIUM]),
+  [CharacterClass.HEALER]:  new Set([ArmorClass.LIGHT, ArmorClass.MEDIUM])
+};
+
+/**
+ * Check whether a character is allowed to equip an item.
+ * Returns { canEquip: true } on success or { canEquip: false, reason } on failure.
+ *
+ * Logic (in priority order):
+ *  1. Consumables / Trinkets / Bags are always equippable.
+ *  2. If the item has an explicit `classRestriction` array, that is checked first.
+ *  3. Otherwise the character's class is validated against the allowed weapon-type /
+ *     armor-class sets above.
+ */
+export function canEquipItem(
+  character: Character,
+  item: Item
+): { canEquip: boolean; reason?: string } {
+  if (item.type === ItemType.WEAPON) {
+    const weapon = item as Weapon;
+    if (weapon.classRestriction && weapon.classRestriction.length > 0) {
+      if (!weapon.classRestriction.includes(character.characterClass)) {
+        const allowed = weapon.classRestriction
+          .map(c => c.charAt(0) + c.slice(1).toLowerCase())
+          .join(', ');
+        return { canEquip: false, reason: `Nur für ${allowed} geeignet!` };
+      }
+    } else {
+      const allowedTypes = CLASS_ALLOWED_WEAPON_TYPES[character.characterClass];
+      if (!allowedTypes.has(weapon.weaponType)) {
+        const className = character.characterClass.charAt(0) + character.characterClass.slice(1).toLowerCase();
+        return { canEquip: false, reason: `${className} kann keine ${weapon.weaponType}-Waffen tragen.` };
+      }
+    }
+  } else if (item.type === ItemType.ARMOR) {
+    const armor = item as Armor;
+    if (armor.classRestriction && armor.classRestriction.length > 0) {
+      if (!armor.classRestriction.includes(character.characterClass)) {
+        const allowed = armor.classRestriction
+          .map(c => c.charAt(0) + c.slice(1).toLowerCase())
+          .join(', ');
+        return { canEquip: false, reason: `Nur für ${allowed} geeignet!` };
+      }
+    } else {
+      const allowedArmor = CLASS_ALLOWED_ARMOR_CLASSES[character.characterClass];
+      if (!allowedArmor.has(armor.armorClass)) {
+        const className = character.characterClass.charAt(0) + character.characterClass.slice(1).toLowerCase();
+        return { canEquip: false, reason: `${className} kann keine ${armor.armorClass}-Rüstung tragen.` };
+      }
+    }
+  }
+  return { canEquip: true };
 }

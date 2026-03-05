@@ -10,6 +10,27 @@ export enum ItemType {
 }
 
 /**
+ * Weapon type categories (used for class-restriction checks)
+ */
+export enum WeaponType {
+  SWORD = 'SWORD',
+  AXE = 'AXE',
+  DAGGER = 'DAGGER',
+  MACE = 'MACE',
+  STAFF = 'STAFF',
+  BOW = 'BOW'
+}
+
+/**
+ * Armor weight class (used for class-restriction checks)
+ */
+export enum ArmorClass {
+  LIGHT = 'LIGHT',
+  MEDIUM = 'MEDIUM',
+  HEAVY = 'HEAVY'
+}
+
+/**
  * Item rarity levels
  */
 export enum ItemRarity {
@@ -33,12 +54,26 @@ export interface Item {
 }
 
 /**
+ * Stat bonuses granted by equipped weapons or armor
+ */
+export interface ItemStatBonus {
+  strength?: number;
+  agility?: number;
+  intelligence?: number;
+}
+
+/**
  * Weapon item with attack properties
  */
 export interface Weapon extends Item {
   type: ItemType.WEAPON;
+  weaponType: WeaponType;
   damage: number;
   attackSpeed: number;
+  /** Classes allowed to equip this weapon. Empty / absent = universal. */
+  classRestriction?: string[];
+  /** Additional stat bonuses from this weapon */
+  statBonus?: ItemStatBonus;
 }
 
 /**
@@ -69,8 +104,11 @@ export interface Trinket extends Item {
  */
 export interface Armor extends Item {
   type: ItemType.ARMOR;
+  armorClass: ArmorClass;
   defense: number;
   slot: 'head' | 'chest' | 'legs' | 'feet';
+  /** Classes allowed to equip this armor. Empty / absent = universal. */
+  classRestriction?: string[];
 }
 
 /**
