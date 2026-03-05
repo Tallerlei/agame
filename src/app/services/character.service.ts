@@ -3,7 +3,8 @@ import {
   Character,
   CharacterClass,
   createCharacter,
-  calculateExpToNextLevel
+  calculateExpToNextLevel,
+  canEquipItem
 } from '../models/character.model';
 import { Ability, AbilityType, createBasicAttack } from '../models/ability.model';
 import { Item, Weapon, Armor, Trinket, Bag, ItemType } from '../models/item.model';
@@ -185,14 +186,26 @@ export class CharacterService {
   }
 
   /**
-   * Equip an item
+   * Equip an item.
+   * Returns { success: true } on success or { success: false, reason } if the
+   * character's class is not allowed to use the item.
    */
-  equipItem(characterId: string, itemId: string): void {
+  equipItem(characterId: string, itemId: string): { success: boolean; reason?: string } {
+    let result: { success: boolean; reason?: string } = { success: false };
+
     this.updateCharacter(characterId, char => {
       const itemIndex = char.inventory.items.findIndex(i => i.id === itemId);
       if (itemIndex === -1) return char;
 
       const item = char.inventory.items[itemIndex];
+
+      // Class restriction check
+      const equipCheck = canEquipItem(char, item);
+      if (!equipCheck.canEquip) {
+        result = { success: false, reason: equipCheck.reason };
+        return char;
+      }
+
       const newEquipment = { ...char.equipment };
       const newInventory = [...char.inventory.items];
       
@@ -229,12 +242,15 @@ export class CharacterService {
       const BASE_INVENTORY_SIZE = 10;
       const newMaxSize = BASE_INVENTORY_SIZE + (newEquipment.bag?.slotsGranted ?? 0);
 
+      result = { success: true };
       return {
         ...char,
         equipment: newEquipment,
         inventory: { ...char.inventory, items: newInventory, maxSize: newMaxSize }
       };
     });
+
+    return result;
   }
 
   /**

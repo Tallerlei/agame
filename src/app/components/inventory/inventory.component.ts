@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
 import { Item, ItemType, ItemRarity, Weapon, Armor, Consumable, Trinket, Bag } from '../../models/item.model';
-import { calculateEncumbrance } from '../../models/character.model';
+import { calculateEncumbrance, canEquipItem } from '../../models/character.model';
 
 @Component({
   selector: 'app-inventory',
@@ -127,18 +127,27 @@ import { calculateEncumbrance } from '../../models/character.model';
 
         <!-- Inventory Items -->
         <div class="items-section">
-          <h3>Items ({{ char.inventory.items.length }}/{{ char.inventory.maxSize }})</h3>
+          <div class="items-header">
+            <h3>Items ({{ char.inventory.items.length }}/{{ char.inventory.maxSize }})</h3>
+            <button
+              class="filter-btn"
+              [class.active]="filterCompatibleOnly"
+              (click)="filterCompatibleOnly = !filterCompatibleOnly"
+              title="Show only items your class can equip"
+            >🔍 Klassenkompatibel</button>
+          </div>
           
           @if (char.inventory.items.length === 0) {
             <p class="empty-inventory">Your inventory is empty</p>
           } @else {
             <div class="items-grid">
-              @for (item of char.inventory.items; track item.id) {
+              @for (item of getFilteredItems(char); track item.id) {
                 <div
                   class="inventory-item"
                   [class]="item.rarity.toLowerCase()"
                   (click)="selectItem(item)"
                   [class.selected]="selectedItem?.id === item.id"
+                  [class.restricted]="isRestricted(char, item)"
                 >
                   <span class="item-icon">{{ getItemIcon(item) }}</span>
                   <span class="item-name">{{ item.name }}</span>
@@ -155,13 +164,20 @@ import { calculateEncumbrance } from '../../models/character.model';
             <h4 [class]="selectedItem.rarity.toLowerCase()">{{ selectedItem.name }}</h4>
             <p class="item-type">{{ selectedItem.type }} - {{ selectedItem.rarity }}</p>
             <p class="item-desc">{{ selectedItem.description }}</p>
+            @if (getClassRestrictionLabel(selectedItem); as label) {
+              <p class="item-restriction">🔒 {{ label }}</p>
+            }
             <div class="item-stats-block">
               {{ getItemFullStats(selectedItem) }}
             </div>
             <p class="item-value">💰 Value: {{ selectedItem.value }} gold</p>
             
+            @if (equipError) {
+              <p class="equip-error">⚠️ {{ equipError }}</p>
+            }
+
             <div class="item-actions">
-              @if (canEquip(selectedItem)) {
+              @if (canEquip(char, selectedItem)) {
                 <button class="equip-btn" (click)="equipItem()">
                   Equip
                 </button>
@@ -286,6 +302,53 @@ import { calculateEncumbrance } from '../../models/character.model';
 
     .items-section {
       margin-bottom: 1.5rem;
+    }
+
+    .items-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .items-header h3 {
+      margin: 0;
+    }
+
+    .filter-btn {
+      background: #2a2a4a;
+      border: 2px solid #3a3a5a;
+      border-radius: 6px;
+      color: #8a8a8a;
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      border-color: #ffd700;
+      color: #ffd700;
+    }
+
+    .inventory-item.restricted {
+      opacity: 0.45;
+      border-style: dashed;
+    }
+
+    .item-restriction {
+      color: #e67e22;
+      font-size: 0.8rem;
+      margin: 0 0 0.5rem 0;
+    }
+
+    .equip-error {
+      color: #e74c3c;
+      font-size: 0.85rem;
+      margin: 0 0 0.5rem 0;
+      background: rgba(231, 76, 60, 0.12);
+      border-radius: 4px;
+      padding: 0.35rem 0.6rem;
     }
 
     .empty-inventory {
@@ -447,9 +510,46 @@ export class InventoryComponent {
   
   character = this.characterService.activeCharacter;
   selectedItem: Item | null = null;
+  filterCompatibleOnly = false;
+  equipError: string | null = null;
 
   selectItem(item: Item): void {
     this.selectedItem = this.selectedItem?.id === item.id ? null : item;
+    this.equipError = null;
+  }
+
+  getFilteredItems(char: { characterClass: string; inventory: { items: Item[] }; stats: { strength: number } }): Item[] {
+    if (!this.filterCompatibleOnly) return char.inventory.items;
+    return char.inventory.items.filter(item => {
+      const character = this.character();
+      if (!character) return true;
+      return canEquipItem(character, item).canEquip;
+    });
+  }
+
+  isRestricted(char: { characterClass: string; stats: { strength: number }; inventory: { items: Item[] } }, item: Item): boolean {
+    const character = this.character();
+    if (!character) return false;
+    if (item.type !== ItemType.WEAPON && item.type !== ItemType.ARMOR) return false;
+    return !canEquipItem(character, item).canEquip;
+  }
+
+  getClassRestrictionLabel(item: Item): string | null {
+    if (item.type === ItemType.WEAPON) {
+      const w = item as Weapon;
+      if (w.classRestriction && w.classRestriction.length > 0) {
+        return w.classRestriction.map(c => c.charAt(0) + c.slice(1).toLowerCase()).join(', ');
+      }
+      return null;
+    }
+    if (item.type === ItemType.ARMOR) {
+      const a = item as Armor;
+      if (a.classRestriction && a.classRestriction.length > 0) {
+        return a.classRestriction.map(c => c.charAt(0) + c.slice(1).toLowerCase()).join(', ');
+      }
+      return null;
+    }
+    return null;
   }
 
   getItemIcon(item: Item): string {
@@ -463,11 +563,17 @@ export class InventoryComponent {
     }
   }
 
-  canEquip(item: Item): boolean {
-    return item.type === ItemType.WEAPON ||
-           item.type === ItemType.ARMOR ||
-           item.type === ItemType.TRINKET ||
-           item.type === ItemType.BAG;
+  canEquip(char: { characterClass: string; stats: { strength: number }; inventory: { items: Item[] } } | null, item: Item): boolean {
+    if (!char) return false;
+    if (item.type !== ItemType.WEAPON &&
+        item.type !== ItemType.ARMOR &&
+        item.type !== ItemType.TRINKET &&
+        item.type !== ItemType.BAG) {
+      return false;
+    }
+    const character = this.character();
+    if (!character) return false;
+    return canEquipItem(character, item).canEquip;
   }
 
   isConsumable(item: Item): boolean {
@@ -478,8 +584,13 @@ export class InventoryComponent {
     const char = this.character();
     if (!char || !this.selectedItem) return;
 
-    this.characterService.equipItem(char.id, this.selectedItem.id);
-    this.selectedItem = null;
+    const result = this.characterService.equipItem(char.id, this.selectedItem.id);
+    if (result.success) {
+      this.selectedItem = null;
+      this.equipError = null;
+    } else {
+      this.equipError = result.reason ?? 'Dieses Item kann nicht ausgerüstet werden.';
+    }
   }
 
   useItem(): void {
@@ -493,6 +604,7 @@ export class InventoryComponent {
 
     this.characterService.removeItemFromInventory(char.id, this.selectedItem.id);
     this.selectedItem = null;
+    this.equipError = null;
   }
 
   dropItem(): void {
@@ -501,6 +613,7 @@ export class InventoryComponent {
 
     this.characterService.removeItemFromInventory(char.id, this.selectedItem.id);
     this.selectedItem = null;
+    this.equipError = null;
   }
 
   getEncumbrance(char: { inventory: { items: unknown[] }; stats: { strength: number } }): number {
@@ -547,11 +660,18 @@ export class InventoryComponent {
     switch (item.type) {
       case ItemType.WEAPON: {
         const w = item as Weapon;
-        return `⚔️ Damage: ${w.damage}  ⚡ Speed: ${w.attackSpeed.toFixed(1)}x`;
+        const parts = [`⚔️ Damage: ${w.damage}`, `⚡ Speed: ${w.attackSpeed.toFixed(1)}x`, `🗡️ Type: ${w.weaponType}`];
+        if (w.statBonus) {
+          const sb = w.statBonus;
+          if (sb.strength)     parts.push(`💪 STR +${sb.strength}`);
+          if (sb.agility)      parts.push(`🏃 AGI +${sb.agility}`);
+          if (sb.intelligence) parts.push(`🧠 INT +${sb.intelligence}`);
+        }
+        return parts.join('  ');
       }
       case ItemType.ARMOR: {
         const a = item as Armor;
-        return `🛡️ Defense: ${a.defense}  📍 Slot: ${a.slot}`;
+        return `🛡️ Defense: ${a.defense}  📍 Slot: ${a.slot}  🧲 Class: ${a.armorClass}`;
       }
       case ItemType.CONSUMABLE: {
         const c = item as Consumable;

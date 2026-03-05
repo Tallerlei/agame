@@ -3,12 +3,63 @@ import {
   Item,
   ItemType,
   ItemRarity,
+  WeaponType,
+  ArmorClass,
   Weapon,
   Armor,
   Consumable,
   Trinket,
   Bag
 } from '../models/item.model';
+
+/** Weapon name → WeaponType mapping */
+const WEAPON_TYPE_MAP: Record<string, WeaponType> = {
+  Sword:  WeaponType.SWORD,
+  Axe:    WeaponType.AXE,
+  Dagger: WeaponType.DAGGER,
+  Mace:   WeaponType.MACE,
+  Staff:  WeaponType.STAFF,
+  Bow:    WeaponType.BOW
+};
+
+/**
+ * classRestriction arrays per WeaponType.
+ * undefined = universal (no restriction).
+ */
+const WEAPON_CLASS_RESTRICTION: Record<WeaponType, string[] | undefined> = {
+  [WeaponType.SWORD]:  ['WARRIOR'],
+  [WeaponType.AXE]:    ['WARRIOR'],
+  [WeaponType.DAGGER]: ['ROGUE'],
+  [WeaponType.MACE]:   ['WARRIOR', 'HEALER'],
+  [WeaponType.STAFF]:  ['MAGE', 'HEALER'],
+  [WeaponType.BOW]:    ['ROGUE']
+};
+
+/** Stat boosted per WeaponType for the restricted class(es) */
+const WEAPON_STAT_BONUS_STAT: Partial<Record<WeaponType, keyof { strength: number; agility: number; intelligence: number }>> = {
+  [WeaponType.SWORD]:  'strength',
+  [WeaponType.AXE]:    'strength',
+  [WeaponType.DAGGER]: 'agility',
+  [WeaponType.MACE]:   'strength',
+  [WeaponType.STAFF]:  'intelligence',
+  [WeaponType.BOW]:    'agility'
+};
+
+/** Armor prefix → ArmorClass mapping */
+const ARMOR_CLASS_MAP: Record<string, ArmorClass> = {
+  Iron:    ArmorClass.MEDIUM,
+  Steel:   ArmorClass.MEDIUM,
+  Bronze:  ArmorClass.LIGHT,
+  Leather: ArmorClass.LIGHT,
+  Plate:   ArmorClass.HEAVY
+};
+
+/** classRestriction arrays per ArmorClass */
+const ARMOR_CLASS_RESTRICTION: Record<ArmorClass, string[] | undefined> = {
+  [ArmorClass.HEAVY]:  ['WARRIOR'],
+  [ArmorClass.MEDIUM]: ['WARRIOR', 'ROGUE', 'HEALER'],
+  [ArmorClass.LIGHT]:  undefined   // all classes may wear light armor
+};
 
 @Injectable({
   providedIn: 'root'
@@ -86,6 +137,17 @@ export class ItemService {
     const baseName = this.weaponNames[Math.floor(Math.random() * this.weaponNames.length)];
     const multiplier = this.getRarityMultiplier(rarity);
     const baseDamage = 5 + level * 2;
+    const weaponType = WEAPON_TYPE_MAP[baseName] ?? WeaponType.SWORD;
+
+    // Legendary items are universal (no class restriction); otherwise use the type mapping
+    const isLegendary = rarity === ItemRarity.LEGENDARY;
+    const classRestriction = isLegendary ? undefined : WEAPON_CLASS_RESTRICTION[weaponType];
+
+    // Stat bonus: +20 % of base damage for the primary stat
+    const bonusStat = WEAPON_STAT_BONUS_STAT[weaponType];
+    const statBonus = bonusStat
+      ? { [bonusStat]: Math.max(1, Math.floor(baseDamage * multiplier * 0.2)) }
+      : undefined;
 
     return {
       id: crypto.randomUUID(),
@@ -94,8 +156,11 @@ export class ItemService {
       type: ItemType.WEAPON,
       rarity,
       value: Math.floor(10 * level * multiplier),
+      weaponType,
       damage: Math.floor(baseDamage * multiplier),
-      attackSpeed: 1 + Math.random() * 0.5
+      attackSpeed: 1 + Math.random() * 0.5,
+      classRestriction,
+      statBonus
     };
   }
 
@@ -109,6 +174,11 @@ export class ItemService {
     const slotNames: Record<string, string> = { head: 'Helmet', chest: 'Chestplate', legs: 'Leggings', feet: 'Boots' };
     const multiplier = this.getRarityMultiplier(rarity);
     const baseDefense = 2 + level;
+    const armorClass = ARMOR_CLASS_MAP[prefix] ?? ArmorClass.LIGHT;
+
+    // Legendary items are universal
+    const isLegendary = rarity === ItemRarity.LEGENDARY;
+    const classRestriction = isLegendary ? undefined : ARMOR_CLASS_RESTRICTION[armorClass];
 
     return {
       id: crypto.randomUUID(),
@@ -117,8 +187,10 @@ export class ItemService {
       type: ItemType.ARMOR,
       rarity,
       value: Math.floor(8 * level * multiplier),
+      armorClass,
       defense: Math.floor(baseDefense * multiplier),
-      slot
+      slot,
+      classRestriction
     };
   }
 
@@ -174,7 +246,9 @@ export class ItemService {
     rarity: ItemRarity,
     damage: number,
     attackSpeed: number,
-    value: number
+    value: number,
+    weaponType: WeaponType = WeaponType.SWORD,
+    classRestriction?: string[]
   ): Weapon {
     return {
       id: crypto.randomUUID(),
@@ -183,8 +257,10 @@ export class ItemService {
       type: ItemType.WEAPON,
       rarity,
       value,
+      weaponType,
       damage,
-      attackSpeed
+      attackSpeed,
+      classRestriction
     };
   }
 
