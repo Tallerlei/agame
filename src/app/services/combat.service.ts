@@ -14,6 +14,7 @@ import { Ability, AbilityType } from '../models/ability.model';
 import { Consumable, ItemType } from '../models/item.model';
 import { CharacterService, LevelUpInfo } from './character.service';
 import { ItemService } from './item.service';
+import { QuestService } from './quest.service';
 
 export interface CombatEndResult {
   victory: boolean;
@@ -21,7 +22,17 @@ export interface CombatEndResult {
   goldGained: number;
   itemsGained: string[];
   levelUpInfo: LevelUpInfo | null;
+  isBossKill?: boolean;
+  questItemsGained?: string[];
 }
+
+/** Boss stat multipliers applied when spawning a boss enemy */
+const BOSS_HEALTH_MULTIPLIER = 1.8;
+const BOSS_ATTACK_MULTIPLIER = 1.5;
+const BOSS_DEFENSE_MULTIPLIER = 1.3;
+const BOSS_EXP_MULTIPLIER = 2.5;
+const BOSS_GOLD_MULTIPLIER = 3;
+const BOSS_LEVEL_BONUS = 2;
 
 @Injectable({
   providedIn: 'root'
@@ -37,13 +48,16 @@ export class CombatService {
   });
 
   private _lastCombatResult = signal<CombatEndResult | null>(null);
+  private _currentEnemyIsBoss = signal<boolean>(false);
 
   combatState = this._combatState.asReadonly();
   lastCombatResult = this._lastCombatResult.asReadonly();
+  currentEnemyIsBoss = this._currentEnemyIsBoss.asReadonly();
 
   constructor(
     private characterService: CharacterService,
-    private itemService: ItemService
+    private itemService: ItemService,
+    private questService: QuestService
   ) {}
 
   /**
@@ -67,14 +81,42 @@ export class CombatService {
   }
 
   /**
-   * Start combat with a random enemy
+   * Start combat with a random enemy, biased by active quest context
    */
   startRandomCombat(character: Character): void {
-    const enemyNames = ['Goblin', 'Orc', 'Skeleton', 'Wolf', 'Bandit', 'Troll'];
-    const randomName = enemyNames[Math.floor(Math.random() * enemyNames.length)];
-    const enemyLevel = Math.max(1, character.level + Math.floor(Math.random() * 3) - 1);
-    
-    const enemy = createEnemy(randomName, enemyLevel);
+    const questContext = this.questService.getQuestContextEnemy(character.level);
+
+    let enemyName: string;
+    let isBoss = false;
+
+    if (questContext) {
+      enemyName = questContext.name;
+      isBoss = questContext.isBoss;
+    } else {
+      const enemyNames = ['Goblin', 'Orc', 'Skeleton', 'Wolf', 'Bandit', 'Troll'];
+      enemyName = enemyNames[Math.floor(Math.random() * enemyNames.length)];
+    }
+
+    let enemyLevel = Math.max(1, character.level + Math.floor(Math.random() * 3) - 1);
+
+    // Bosses are stronger: higher level and stat boost
+    if (isBoss) {
+      enemyLevel = character.level + BOSS_LEVEL_BONUS;
+    }
+
+    const enemy = createEnemy(enemyName, enemyLevel);
+
+    // Boss enemies get bonus stats
+    if (isBoss) {
+      enemy.maxHealth = Math.floor(enemy.maxHealth * BOSS_HEALTH_MULTIPLIER);
+      enemy.currentHealth = enemy.maxHealth;
+      enemy.attackPower = Math.floor(enemy.attackPower * BOSS_ATTACK_MULTIPLIER);
+      enemy.defense = Math.floor(enemy.defense * BOSS_DEFENSE_MULTIPLIER);
+      enemy.experienceReward = Math.floor(enemy.experienceReward * BOSS_EXP_MULTIPLIER);
+      enemy.goldReward = Math.floor(enemy.goldReward * BOSS_GOLD_MULTIPLIER);
+    }
+
+    this._currentEnemyIsBoss.set(isBoss);
     this.startCombat(character, enemy);
   }
 
@@ -353,6 +395,7 @@ export class CombatService {
     if (!state.player || !state.enemy) return;
 
     let message: string;
+    const isBoss = this._currentEnemyIsBoss();
 
     if (victory) {
       const expGained = state.enemy.experienceReward;
@@ -363,7 +406,25 @@ export class CombatService {
       this.characterService.addGold(state.player.id, goldGained);
       this.characterService.incrementFightsWon(state.player.id);
 
-      // Chance to drop item
+      // Increment quest combat counter and check for quest item drops
+      const questItemName = this.questService.incrementCombatCounter();
+
+      // Record enemy defeat for quest progress
+      this.questService.recordEnemyDefeat(state.enemy.name);
+
+      // Record boss defeat for quest progress
+      if (isBoss) {
+        this.questService.recordBossDefeat(state.enemy.name);
+      }
+
+      // Handle quest item drops
+      const questItemsGained: string[] = [];
+      if (questItemName) {
+        questItemsGained.push(questItemName);
+        this.questService.recordItemCollected(questItemName);
+      }
+
+      // Chance to drop regular item
       const itemDropped = Math.random() < 0.3; // 30% drop chance
       const droppedItems: string[] = [];
       
@@ -374,8 +435,14 @@ export class CombatService {
       }
 
       message = `Victory! ${state.player.name} defeated ${state.enemy.name}! Gained ${expGained} XP and ${goldGained} gold.`;
+      if (isBoss) {
+        message = `🏆 Boss Defeated! ${state.player.name} vanquished ${state.enemy.name}! Gained ${expGained} XP and ${goldGained} gold.`;
+      }
       if (droppedItems.length > 0) {
         message += ` Found: ${droppedItems.join(', ')}`;
+      }
+      if (questItemsGained.length > 0) {
+        message += ` 📦 Quest item: ${questItemsGained.join(', ')}`;
       }
 
       this._lastCombatResult.set({
@@ -383,7 +450,9 @@ export class CombatService {
         experienceGained: expGained,
         goldGained: goldGained,
         itemsGained: droppedItems,
-        levelUpInfo
+        levelUpInfo,
+        isBossKill: isBoss,
+        questItemsGained
       });
     } else {
       message = `Defeat! ${state.player.name} was defeated by ${state.enemy.name}!`;
@@ -409,6 +478,8 @@ export class CombatService {
       combatLog: [...s.combatLog, logEntry],
       isActive: false
     }));
+
+    this._currentEnemyIsBoss.set(false);
   }
 
   /**
@@ -424,6 +495,7 @@ export class CombatService {
       turnCount: 0
     });
     this._lastCombatResult.set(null);
+    this._currentEnemyIsBoss.set(false);
   }
 
   /**

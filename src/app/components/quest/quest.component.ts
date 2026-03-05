@@ -96,6 +96,10 @@ import { calculateEncumbrance } from '../../models/character.model';
               }
             </div>
 
+            @if (getProgressHint(quest); as hint) {
+              <div class="quest-hint">{{ hint }}</div>
+            }
+
             <div class="quest-rewards">
               <span>💰 {{ quest.rewards.gold }} gold</span>
               <span>⭐ {{ quest.rewards.experience }} XP</span>
@@ -302,6 +306,17 @@ import { calculateEncumbrance } from '../../models/character.model';
       gap: 1rem;
       margin: 1rem 0;
       color: #e0e0e0;
+    }
+
+    .quest-hint {
+      background: linear-gradient(135deg, rgba(155, 89, 182, 0.2), rgba(142, 68, 173, 0.1));
+      border: 1px solid rgba(155, 89, 182, 0.3);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      margin: 0.5rem 0;
+      color: #d4a5f5;
+      font-size: 0.85rem;
+      font-style: italic;
     }
 
     .quest-meta {
@@ -593,5 +608,9 @@ export class QuestComponent {
     return quest.objectives.some(
       obj => obj.type === ObjectiveType.EXPLORE_LOCATION && !obj.completed
     );
+  }
+
+  getProgressHint(quest: Quest): string | null {
+    return this.questService.getQuestProgressHint(quest);
   }
 }
