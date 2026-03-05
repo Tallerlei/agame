@@ -26,6 +26,14 @@ export interface CombatEndResult {
   questItemsGained?: string[];
 }
 
+/** Boss stat multipliers applied when spawning a boss enemy */
+const BOSS_HEALTH_MULTIPLIER = 1.8;
+const BOSS_ATTACK_MULTIPLIER = 1.5;
+const BOSS_DEFENSE_MULTIPLIER = 1.3;
+const BOSS_EXP_MULTIPLIER = 2.5;
+const BOSS_GOLD_MULTIPLIER = 3;
+const BOSS_LEVEL_BONUS = 2;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -91,21 +99,21 @@ export class CombatService {
 
     let enemyLevel = Math.max(1, character.level + Math.floor(Math.random() * 3) - 1);
 
-    // Bosses are stronger: +2 levels and stat boost
+    // Bosses are stronger: higher level and stat boost
     if (isBoss) {
-      enemyLevel = character.level + 2;
+      enemyLevel = character.level + BOSS_LEVEL_BONUS;
     }
 
     const enemy = createEnemy(enemyName, enemyLevel);
 
     // Boss enemies get bonus stats
     if (isBoss) {
-      enemy.maxHealth = Math.floor(enemy.maxHealth * 1.8);
+      enemy.maxHealth = Math.floor(enemy.maxHealth * BOSS_HEALTH_MULTIPLIER);
       enemy.currentHealth = enemy.maxHealth;
-      enemy.attackPower = Math.floor(enemy.attackPower * 1.5);
-      enemy.defense = Math.floor(enemy.defense * 1.3);
-      enemy.experienceReward = Math.floor(enemy.experienceReward * 2.5);
-      enemy.goldReward = Math.floor(enemy.goldReward * 3);
+      enemy.attackPower = Math.floor(enemy.attackPower * BOSS_ATTACK_MULTIPLIER);
+      enemy.defense = Math.floor(enemy.defense * BOSS_DEFENSE_MULTIPLIER);
+      enemy.experienceReward = Math.floor(enemy.experienceReward * BOSS_EXP_MULTIPLIER);
+      enemy.goldReward = Math.floor(enemy.goldReward * BOSS_GOLD_MULTIPLIER);
     }
 
     this._currentEnemyIsBoss.set(isBoss);

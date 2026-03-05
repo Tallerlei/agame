@@ -11,6 +11,16 @@ import {
 } from '../models/quest.model';
 import { CharacterService } from './character.service';
 
+/** Template for a single objective in a generated quest */
+interface QuestObjectiveTemplate {
+  type: ObjectiveType;
+  description: string;
+  count: number;
+  targetEnemyType?: string;
+  targetBossName?: string;
+  targetItemName?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -223,7 +233,7 @@ export class QuestService {
    * Generate a new quest based on player level
    */
   private generateNewQuest(playerLevel: number): void {
-    const questTemplates = [
+    const questTemplates: { name: string; description: string; objectives: QuestObjectiveTemplate[]; location: string; questEnemies: string[] }[] = [
       {
         name: 'Bandit Camp',
         description: 'Clear out the bandit camp and find their treasure',
@@ -278,9 +288,9 @@ export class QuestService {
       targetCount: obj.count,
       currentCount: 0,
       completed: false,
-      targetEnemyType: (obj as { targetEnemyType?: string }).targetEnemyType,
-      targetBossName: (obj as { targetBossName?: string }).targetBossName,
-      targetItemName: (obj as { targetItemName?: string }).targetItemName
+      targetEnemyType: obj.targetEnemyType,
+      targetBossName: obj.targetBossName,
+      targetItemName: obj.targetItemName
     }));
 
     const newQuest = this.createQuest(
