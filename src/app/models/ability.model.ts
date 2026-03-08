@@ -23,6 +23,21 @@ export interface Ability {
   currentCooldown: number;
   manaCost: number;
   levelRequired: number;
+  /** True when the ability was unlocked via the level-milestone skill system */
+  isSkill?: boolean;
+  /** True for passive skills that grant permanent bonuses rather than combat actions */
+  isPassive?: boolean;
+  /** Permanent stat bonuses applied when a passive skill is learned */
+  passiveBonus?: {
+    strength?: number;
+    agility?: number;
+    intelligence?: number;
+    defense?: number;
+    attackPower?: number;
+    maxHealth?: number;
+  };
+  /** True for AoE skills */
+  isAoe?: boolean;
 }
 
 /**

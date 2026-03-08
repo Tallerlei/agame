@@ -1,5 +1,6 @@
 import { Ability } from './ability.model';
 import { Item, Weapon, Armor, Trinket, Consumable, Bag, ItemType, WeaponType, ArmorClass } from './item.model';
+import { ActiveTrait } from './trait.model';
 
 /**
  * Character class types with unique abilities
@@ -64,6 +65,10 @@ export interface Character {
   gold: number;
   questsCompleted: number;
   fightsWon: number;
+  /** IDs of skills learned through level-milestone selection */
+  unlockedSkillIds: string[];
+  /** Active traits gained by consuming enemy body parts */
+  traits: ActiveTrait[];
 }
 
 /**
@@ -164,7 +169,9 @@ export function createCharacter(
     inventory: { items: [], maxSize: 10 },
     gold: 0,
     questsCompleted: 0,
-    fightsWon: 0
+    fightsWon: 0,
+    unlockedSkillIds: [],
+    traits: []
   };
 }
 
