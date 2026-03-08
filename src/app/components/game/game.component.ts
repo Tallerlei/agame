@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { CharacterService } from '../../services/character.service';
 import { CombatService } from '../../services/combat.service';
 import { SaveGameService } from '../../services/save-game.service';
+import { QuestService } from '../../services/quest.service';
 import { CharacterCreationComponent } from '../character-creation/character-creation.component';
 import { CharacterStatsComponent } from '../character-stats/character-stats.component';
 import { CombatComponent } from '../combat/combat.component';
@@ -24,19 +25,36 @@ type GameTab = 'combat' | 'quests' | 'inventory';
   ],
   template: `
     <div class="game-container">
+      @if (showNewGameDialog) {
+        <div class="dialog-overlay">
+          <div class="dialog-box">
+            <h2 class="dialog-title">⚠️ Neues Spiel starten?</h2>
+            <p class="dialog-msg">Es läuft bereits eine aktive Spielsitzung. Möchtest du zuerst speichern, bevor du ein neues Spiel startest?</p>
+            <div class="dialog-actions">
+              <button class="dialog-btn save" (click)="confirmNewGame(true)">💾 Speichern &amp; Neu starten</button>
+              <button class="dialog-btn discard" (click)="confirmNewGame(false)">🗑️ Ohne Speichern neu starten</button>
+              <button class="dialog-btn cancel" (click)="cancelNewGame()">↩️ Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      }
+
       <header class="game-header">
         <h1>⚔️ Epic Adventure ⚔️</h1>
         <p class="tagline">Fight. Explore. Become Legend.</p>
-        @if (hasCharacter()) {
-          <div class="save-controls">
+        <div class="save-controls">
+          <button class="new-game-btn" (click)="openNewGame()" title="Neues Spiel starten">
+            🆕 Neues Spiel
+          </button>
+          @if (hasCharacter()) {
             <button class="save-btn" (click)="saveGame()" title="Save Game">
               💾 Save
             </button>
-            @if (saveMessage) {
-              <span class="save-msg" [class.error]="saveError">{{ saveMessage }}</span>
-            }
-          </div>
-        }
+          }
+          @if (saveMessage) {
+            <span class="save-msg" [class.error]="saveError">{{ saveMessage }}</span>
+          }
+        </div>
       </header>
 
       @if (!hasCharacter()) {
@@ -222,6 +240,97 @@ type GameTab = 'combat' | 'quests' | 'inventory';
       margin-top: 2rem;
     }
 
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .dialog-box {
+      background: #1a1a2e;
+      border: 2px solid #ffd700;
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .dialog-title {
+      color: #ffd700;
+      margin: 0 0 1rem 0;
+      font-size: 1.4rem;
+    }
+
+    .dialog-msg {
+      color: #c0c0c0;
+      margin: 0 0 1.5rem 0;
+      line-height: 1.5;
+    }
+
+    .dialog-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .dialog-btn {
+      padding: 0.65rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: bold;
+    }
+
+    .dialog-btn.save {
+      background: #27ae60;
+      color: #fff;
+    }
+
+    .dialog-btn.save:hover {
+      background: #2ecc71;
+    }
+
+    .dialog-btn.discard {
+      background: #c0392b;
+      color: #fff;
+    }
+
+    .dialog-btn.discard:hover {
+      background: #e74c3c;
+    }
+
+    .dialog-btn.cancel {
+      background: #2a2a4a;
+      color: #e0e0e0;
+    }
+
+    .dialog-btn.cancel:hover {
+      background: #3a3a6a;
+    }
+
+    .new-game-btn {
+      padding: 0.4rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      background: #2a4a2a;
+      color: #e0e0e0;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .new-game-btn:hover {
+      background: #3a6a3a;
+      color: #ffd700;
+    }
+
     @media (max-width: 900px) {
       .game-layout {
         grid-template-columns: 1fr;
@@ -237,11 +346,13 @@ export class GameComponent implements OnInit {
   private characterService = inject(CharacterService);
   private combatService = inject(CombatService);
   private saveGameService = inject(SaveGameService);
+  private questService = inject(QuestService);
 
   activeTab: GameTab = 'combat';
   activeCharacter = this.characterService.activeCharacter;
   saveMessage = '';
   saveError = false;
+  showNewGameDialog = false;
 
   private _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -270,6 +381,37 @@ export class GameComponent implements OnInit {
 
   hasCharacter(): boolean {
     return this.characterService.characters().length > 0;
+  }
+
+  openNewGame(): void {
+    if (this.hasCharacter() || this.saveGameService.hasSavedGame()) {
+      this.showNewGameDialog = true;
+    } else {
+      this.startNewGame();
+    }
+  }
+
+  confirmNewGame(saveFirst: boolean): void {
+    this.showNewGameDialog = false;
+    if (saveFirst) {
+      this.saveGameService.saveGame();
+    }
+    this.startNewGame();
+  }
+
+  cancelNewGame(): void {
+    this.showNewGameDialog = false;
+  }
+
+  private startNewGame(): void {
+    if (this._autoSaveTimer) {
+      clearTimeout(this._autoSaveTimer);
+      this._autoSaveTimer = null;
+    }
+    this.saveGameService.deleteSave();
+    this.characterService.resetState();
+    this.questService.resetState();
+    this.activeTab = 'combat';
   }
 
   saveGame(): void {

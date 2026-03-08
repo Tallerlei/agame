@@ -329,6 +329,14 @@ export class CharacterService {
   }
 
   /**
+   * Reset all character state (used when starting a new game)
+   */
+  resetState(): void {
+    this._characters.set([]);
+    this._activeCharacter.set(null);
+  }
+
+  /**
    * Load state from save game (with backward-compatibility for legacy saves)
    */
   loadState(characters: Character[], activeCharacterId: string | null): void {

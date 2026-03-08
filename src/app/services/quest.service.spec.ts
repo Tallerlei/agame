@@ -237,4 +237,31 @@ describe('QuestService', () => {
       expect(defeatObj?.currentCount).toBe(0);
     });
   });
+
+  describe('resetState', () => {
+    it('should clear active and completed quests on resetState', () => {
+      const character = createCharacter('TestHero', CharacterClass.WARRIOR);
+      characterService['_characters'].set([character]);
+      characterService['_activeCharacter'].set(character);
+
+      const quest = service.availableQuests()[0];
+      service.startQuest(quest.id, character.id);
+      expect(service.activeQuests().length).toBe(1);
+
+      service.resetState();
+
+      expect(service.activeQuests().length).toBe(0);
+      expect(service.completedQuests().length).toBe(0);
+    });
+
+    it('should regenerate initial quests after resetState', () => {
+      service.resetState();
+      expect(service.availableQuests().length).toBeGreaterThan(0);
+    });
+
+    it('should reset location to Town after resetState', () => {
+      service.resetState();
+      expect(service.currentLocation()).toBe('Town');
+    });
+  });
 });

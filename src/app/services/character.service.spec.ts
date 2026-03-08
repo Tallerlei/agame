@@ -55,6 +55,29 @@ describe('CharacterService – Skill System', () => {
   });
 });
 
+describe('CharacterService – resetState', () => {
+  let service: CharacterService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [CharacterService] });
+    service = TestBed.inject(CharacterService);
+  });
+
+  it('should clear all characters on resetState', () => {
+    service.createCharacter('Hero', CharacterClass.WARRIOR);
+    expect(service.characters().length).toBe(1);
+    service.resetState();
+    expect(service.characters().length).toBe(0);
+  });
+
+  it('should set activeCharacter to null on resetState', () => {
+    service.createCharacter('Hero', CharacterClass.WARRIOR);
+    expect(service.activeCharacter()).not.toBeNull();
+    service.resetState();
+    expect(service.activeCharacter()).toBeNull();
+  });
+});
+
 describe('CharacterService – Trait System', () => {
   let service: CharacterService;
   let characterId: string;
