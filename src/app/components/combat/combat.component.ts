@@ -20,14 +20,14 @@ import { SkillDefinition } from '../../models/skill.model';
             <!-- Skill Selection Mode -->
             @if (result.pendingSkillChoices && result.pendingSkillChoices.length > 0 && !skillChosen) {
               <div class="skill-selection">
-                <h2>🌟 Level {{ result.skillSelectionLevel }} erreicht!</h2>
-                <p class="skill-prompt">Wähle einen neuen Skill:</p>
+                <h2>🌟 Level {{ result.skillSelectionLevel }} reached!</h2>
+                <p class="skill-prompt">Choose a new skill:</p>
                 <div class="skill-choices">
                   @for (skill of result.pendingSkillChoices; track skill.id) {
                     <button class="skill-choice-btn" [class.passive]="skill.isPassive" (click)="selectSkill(skill, result)">
                       <span class="skill-icon">{{ skill.isPassive ? '🛡️' : skill.abilityType === 'HEAL' ? '💚' : '💥' }}</span>
                       <span class="skill-name">{{ skill.name }}</span>
-                      <span class="skill-tag">{{ skill.isPassive ? 'Passiv' : 'Aktiv' }}{{ skill.isAoe ? ' · AoE' : '' }}</span>
+                      <span class="skill-tag">{{ skill.isPassive ? 'Passive' : 'Active' }}{{ skill.isAoe ? ' · AoE' : '' }}</span>
                       <span class="skill-desc">{{ skill.description }}</span>
                     </button>
                   }
@@ -36,9 +36,9 @@ import { SkillDefinition } from '../../models/skill.model';
             } @else if (skillLearnedName) {
               <!-- Skill Learned Confirmation -->
               <div class="skill-learned">
-                <h2>✅ Skill erlernt!</h2>
+                <h2>✅ Skill learned!</h2>
                 <p class="learned-name">{{ skillLearnedName }}</p>
-                <button class="dismiss-btn" (click)="dismissResult()">Weiter</button>
+                <button class="dismiss-btn" (click)="dismissResult()">Continue</button>
               </div>
             } @else {
               <!-- Normal Victory / Defeat -->
@@ -200,11 +200,11 @@ import { SkillDefinition } from '../../models/skill.model';
                     [class.used]="traitConsumedThisCombat()"
                     [disabled]="traitConsumedThisCombat()"
                     (click)="useBodyPart(bp)"
-                    [title]="bp.timesConsumed > 0 ? bp.description : 'Unbekannt – Effekte unbekannt'"
+                    [title]="bp.timesConsumed > 0 ? bp.description : 'Unknown – effects unknown'"
                   >
                     🧬 {{ bp.name }}
                     @if (bp.timesConsumed === 0) { <span class="blind-tag">?</span> }
-                    @if (traitConsumedThisCombat()) { <span class="cooldown">(1/Kampf)</span> }
+                    @if (traitConsumedThisCombat()) { <span class="cooldown">(1/combat)</span> }
                   </button>
                 }
               </div>

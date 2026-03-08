@@ -420,7 +420,7 @@ export class CharacterService {
 
     const def = TRAIT_DEFINITIONS.find(t => t.id === item.traitDefinitionId);
     if (!def) {
-      result.message = 'Unbekanntes Körperteil.';
+      result.message = 'Unknown body part.';
       return result;
     }
 
@@ -430,7 +430,7 @@ export class CharacterService {
       // Check trait cap
       const existingTrait = char.traits.find(t => t.definitionId === def.id);
       if (!existingTrait && char.traits.length >= 5) {
-        result = { ...result, atTraitCap: true, wasBlind, traitDefinition: def, message: 'Trait-Limit (5) erreicht!' };
+        result = { ...result, atTraitCap: true, wasBlind, traitDefinition: def, message: 'Trait limit (5) reached!' };
         return char;
       }
 
@@ -491,8 +491,8 @@ export class CharacterService {
         atTraitCap: false,
         alreadyHasTrait: !!existingTrait,
         message: wasBlind
-          ? `Unbekannt konsumiert – Risiko: ${def.riskLevel === 'low' ? 'Niedrig' : def.riskLevel === 'medium' ? 'Mittel' : 'Hoch'}`
-          : `${def.name} konsumiert: +${def.positiveEffect.amount} ${def.positiveEffect.stat}${negativeTriggered ? ` (Debuff aktiv: -${def.negativeEffect.amount} ${def.negativeEffect.stat} für ${def.negativeEffect.durationFights} Kämpfe)` : ''}`
+          ? `Unknown – Risk: ${def.riskLevel === 'low' ? 'Low' : def.riskLevel === 'medium' ? 'Medium' : 'High'}`
+          : `${def.name} consumed: +${def.positiveEffect.amount} ${def.positiveEffect.stat}${negativeTriggered ? ` (Debuff active: -${def.negativeEffect.amount} ${def.negativeEffect.stat} for ${def.negativeEffect.durationFights} fights)` : ''}`
       };
 
       return {

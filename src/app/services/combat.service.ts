@@ -510,8 +510,8 @@ export class CombatService {
             id: crypto.randomUUID(),
             name: traitDef.name,
             description: existingConsumeTimes > 0
-              ? `+${traitDef.positiveEffect.amount} ${traitDef.positiveEffect.stat} (perm), ${Math.round(traitDef.negativeEffect.chance * 100)}% Debuff-Risiko`
-              : 'Unbekanntes Körperteil – Risiko unbekannt',
+              ? `+${traitDef.positiveEffect.amount} ${traitDef.positiveEffect.stat} (perm), ${Math.round(traitDef.negativeEffect.chance * 100)}% debuff risk`
+              : 'Unknown body part – risk unknown',
             type: ItemType.BODY_PART,
             rarity: traitDef.rarity,
             value: 0,
@@ -547,7 +547,7 @@ export class CombatService {
         message += ` Found: ${droppedItems.join(', ')}`;
       }
       if (bodyPartsGained.length > 0) {
-        message += ` 🧬 Körperteil: ${bodyPartsGained.join(', ')}`;
+        message += ` 🧬 Body part: ${bodyPartsGained.join(', ')}`;
       }
       if (questItemsGained.length > 0) {
         message += ` 📦 Quest item: ${questItemsGained.join(', ')}`;

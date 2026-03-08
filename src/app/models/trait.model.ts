@@ -69,7 +69,7 @@ export const TRAIT_DROP_CHANCE: Record<ItemRarity, number> = {
 export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   {
     id: 'goblin-ear',
-    name: 'Goblin Ohr',
+    name: 'Goblin Ear',
     enemyName: 'Goblin',
     rarity: ItemRarity.COMMON,
     riskLevel: 'low',
@@ -78,7 +78,7 @@ export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   },
   {
     id: 'orc-heart',
-    name: 'Orc Herz',
+    name: 'Orc Heart',
     enemyName: 'Orc',
     rarity: ItemRarity.RARE,
     riskLevel: 'medium',
@@ -88,7 +88,7 @@ export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   },
   {
     id: 'skeleton-bone',
-    name: 'Skelett Knochen',
+    name: 'Skeleton Bone',
     enemyName: 'Skeleton',
     rarity: ItemRarity.UNCOMMON,
     riskLevel: 'low',
@@ -97,7 +97,7 @@ export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   },
   {
     id: 'wolf-claw',
-    name: 'Wolf Klaue',
+    name: 'Wolf Claw',
     enemyName: 'Wolf',
     rarity: ItemRarity.COMMON,
     riskLevel: 'low',
@@ -106,7 +106,7 @@ export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   },
   {
     id: 'bandit-eye',
-    name: 'Banditen Auge',
+    name: 'Bandit Eye',
     enemyName: 'Bandit',
     rarity: ItemRarity.UNCOMMON,
     riskLevel: 'medium',
@@ -115,7 +115,7 @@ export const TRAIT_DEFINITIONS: TraitDefinition[] = [
   },
   {
     id: 'troll-hide',
-    name: 'Troll Haut',
+    name: 'Troll Hide',
     enemyName: 'Troll',
     rarity: ItemRarity.RARE,
     riskLevel: 'high',

@@ -77,14 +77,14 @@ type CharTab = 'stats' | 'skills' | 'traits';
         @if (activeTab === 'skills') {
           <div class="skills-panel">
             @if (getLearnedSkills().length === 0) {
-              <p class="empty-msg">Noch keine Skills erlernt.<br>Erreiche Level 5 um deinen ersten Skill zu wählen!</p>
+              <p class="empty-msg">No skills learned yet.<br>Reach level 5 to choose your first skill!</p>
             }
             @for (skill of getLearnedSkills(); track skill.id) {
               <div class="skill-entry" [class.passive]="skill.isPassive">
                 <div class="skill-header">
                   <span class="skill-icon">{{ skill.isPassive ? '🛡️' : skill.type === 'HEAL' ? '💚' : '💥' }}</span>
                   <span class="skill-name">{{ skill.name }}</span>
-                  <span class="skill-badge">{{ skill.isPassive ? 'Passiv' : 'Aktiv' }}{{ skill.isAoe ? ' · AoE' : '' }}</span>
+                  <span class="skill-badge">{{ skill.isPassive ? 'Passive' : 'Active' }}{{ skill.isAoe ? ' · AoE' : '' }}</span>
                 </div>
                 <p class="skill-desc">{{ skill.description }}</p>
                 @if (!skill.isPassive) {
@@ -109,7 +109,7 @@ type CharTab = 'stats' | 'skills' | 'traits';
             }
             <p class="next-skill-hint">
               @if (getNextSkillLevel() > 0) {
-                Nächste Skill-Wahl: Level {{ getNextSkillLevel() }}
+                Next skill choice: Level {{ getNextSkillLevel() }}
               }
             </p>
           </div>
@@ -127,7 +127,7 @@ type CharTab = 'stats' | 'skills' | 'traits';
               </div>
             </div>
             @if (character.traits.length === 0) {
-              <p class="empty-msg">Noch keine Traits.<br>Besiege Gegner um Körperteile zu finden!</p>
+              <p class="empty-msg">No traits yet.<br>Defeat enemies to find body parts!</p>
             }
             @for (trait of character.traits; track trait.definitionId) {
               <div class="trait-entry" [class.debuff-active]="trait.negativeDebuffActive">
@@ -143,15 +143,15 @@ type CharTab = 'stats' | 'skills' | 'traits';
                   <div class="effect negative" [class.active]="trait.negativeDebuffActive">
                     ⚠️ {{ Math.round(trait.negativeEffect.chance * 100) }}% -{{ trait.negativeEffect.amount }} {{ trait.negativeEffect.stat }}
                     @if (trait.negativeEffect.durationFights > 0) {
-                      ({{ trait.negativeEffect.durationFights }} Kämpfe)
+                      ({{ trait.negativeEffect.durationFights }} fights)
                     }
                     @if (trait.negativeDebuffActive) {
-                      <span class="debuff-counter">Aktiv: {{ trait.negativeDebuffRemainingFights }}🕐</span>
+                      <span class="debuff-counter">Active: {{ trait.negativeDebuffRemainingFights }}🕐</span>
                     }
                   </div>
                 </div>
                 <div class="trait-footer">
-                  <span>Konsumiert: {{ trait.consumeCount }}×</span>
+                  <span>Consumed: {{ trait.consumeCount }}×</span>
                 </div>
               </div>
             }
@@ -280,9 +280,9 @@ export class CharacterStatsComponent {
 
   getRiskLabel(riskLevel: 'low' | 'medium' | 'high'): string {
     switch (riskLevel) {
-      case 'low': return 'Niedrig';
-      case 'medium': return 'Mittel';
-      case 'high': return 'Hoch';
+      case 'low': return 'Low';
+      case 'medium': return 'Medium';
+      case 'high': return 'High';
     }
   }
 }

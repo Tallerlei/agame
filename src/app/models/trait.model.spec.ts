@@ -87,6 +87,7 @@ describe('Trait Model', () => {
     it('should find Orc trait', () => {
       const def = getTraitDefinitionByEnemy('Orc');
       expect(def?.id).toBe('orc-heart');
+      expect(def?.name).toBe('Orc Heart');
     });
   });
 });

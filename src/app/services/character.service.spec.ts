@@ -92,7 +92,7 @@ describe('CharacterService – Trait System', () => {
     const result = service.consumeBodyPart(characterId, item);
     expect(result.success).toBeTrue();
     expect(result.wasBlind).toBeTrue();
-    expect(result.message).toContain('Unbekannt');
+    expect(result.message).toContain('Unknown');
   });
 
   it('should report second consumption as non-blind with effect details', () => {
