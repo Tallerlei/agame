@@ -561,6 +561,20 @@ export class QuestService {
   }
 
   /**
+   * Reset all quest state and regenerate initial quests (used when starting a new game)
+   */
+  resetState(): void {
+    this._availableQuests.set([]);
+    this._activeQuests.set([]);
+    this._completedQuests.set([]);
+    this._pendingCompletions.set([]);
+    this._currentLocation.set('Town');
+    this._exploringLocation.set(null);
+    this._exploringQuestId.set(null);
+    this.generateInitialQuests();
+  }
+
+  /**
    * Load state from save game
    */
   loadState(state: {
