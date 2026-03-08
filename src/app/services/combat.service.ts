@@ -11,7 +11,13 @@ import {
 import { Character } from '../models/character.model';
 import { calculateEncumbrance } from '../models/character.model';
 import { Ability, AbilityType } from '../models/ability.model';
-import { Consumable, ItemType } from '../models/item.model';
+import { Consumable, ItemType, BodyPartItem, ItemRarity } from '../models/item.model';
+import { SkillDefinition } from '../models/skill.model';
+import {
+  TraitDefinition,
+  TRAIT_DROP_CHANCE,
+  getTraitDefinitionByEnemy
+} from '../models/trait.model';
 import { CharacterService, LevelUpInfo } from './character.service';
 import { ItemService } from './item.service';
 import { QuestService } from './quest.service';
@@ -24,6 +30,12 @@ export interface CombatEndResult {
   levelUpInfo: LevelUpInfo | null;
   isBossKill?: boolean;
   questItemsGained?: string[];
+  /** Body parts dropped by the enemy (trait consumables) */
+  bodyPartsGained?: string[];
+  /** Skill choices presented at a level milestone (level % 5 === 0) */
+  pendingSkillChoices?: SkillDefinition[];
+  /** The milestone level that triggered the skill selection */
+  skillSelectionLevel?: number;
 }
 
 /** Boss stat multipliers applied when spawning a boss enemy */
@@ -49,10 +61,13 @@ export class CombatService {
 
   private _lastCombatResult = signal<CombatEndResult | null>(null);
   private _currentEnemyIsBoss = signal<boolean>(false);
+  /** Tracks whether a body-part/trait consumable was already used this combat (once per combat) */
+  private _traitConsumedThisCombat = signal<boolean>(false);
 
   combatState = this._combatState.asReadonly();
   lastCombatResult = this._lastCombatResult.asReadonly();
   currentEnemyIsBoss = this._currentEnemyIsBoss.asReadonly();
+  traitConsumedThisCombat = this._traitConsumedThisCombat.asReadonly();
 
   constructor(
     private characterService: CharacterService,
@@ -64,6 +79,7 @@ export class CombatService {
    * Start a new combat encounter
    */
   startCombat(character: Character, enemy: Enemy): void {
+    this._traitConsumedThisCombat.set(false);
     this._combatState.set({
       isActive: true,
       currentTurn: 'player',
@@ -293,6 +309,51 @@ export class CombatService {
   }
 
   /**
+   * Player consumes a body-part trait item during combat.
+   * Allowed once per combat encounter.
+   */
+  useBodyPart(item: BodyPartItem): void {
+    const state = this._combatState();
+    if (!state.isActive || state.currentTurn !== 'player' || !state.player) {
+      return;
+    }
+    if (this._traitConsumedThisCombat()) {
+      return; // Once per combat only
+    }
+
+    const playerId = state.player.id;
+    const result = this.characterService.consumeBodyPart(playerId, item);
+
+    if (!result.success) {
+      return;
+    }
+
+    this._traitConsumedThisCombat.set(true);
+
+    const logEntry: CombatLogEntry = {
+      timestamp: Date.now(),
+      attacker: state.player.name,
+      defender: state.player.name,
+      action: CombatActionType.USE_ITEM,
+      message: result.message
+    };
+
+    // Sync updated character into combat state (stats may have changed)
+    const updatedChar = this.characterService.activeCharacter();
+
+    this._combatState.update(s => ({
+      ...s,
+      player: updatedChar
+        ? { ...s.player!, stats: updatedChar.stats, inventory: updatedChar.inventory, traits: updatedChar.traits }
+        : s.player,
+      combatLog: [...s.combatLog, logEntry],
+      currentTurn: 'enemy' as const
+    }));
+
+    setTimeout(() => this.enemyTurn(), 500);
+  }
+
+  /**
    * Enemy's turn
    */
   private enemyTurn(): void {
@@ -406,6 +467,9 @@ export class CombatService {
       this.characterService.addGold(state.player.id, goldGained);
       this.characterService.incrementFightsWon(state.player.id);
 
+      // Decrement trait debuff fight counters
+      this.characterService.decrementTraitFights(state.player.id);
+
       // Increment quest combat counter and check for quest item drops
       const questItemName = this.questService.incrementCombatCounter();
 
@@ -434,12 +498,56 @@ export class CombatService {
         droppedItems.push(item.name);
       }
 
+      // Body part drop (trait consumable)
+      const bodyPartsGained: string[] = [];
+      const traitDef = getTraitDefinitionByEnemy(state.enemy.name);
+      if (traitDef) {
+        const dropChance = TRAIT_DROP_CHANCE[traitDef.rarity];
+        if (Math.random() < dropChance) {
+          const char = this.characterService.activeCharacter();
+          const existingConsumeTimes = char?.traits.find(t => t.definitionId === traitDef.id)?.consumeCount ?? 0;
+          const bodyPartItem: BodyPartItem = {
+            id: crypto.randomUUID(),
+            name: traitDef.name,
+            description: existingConsumeTimes > 0
+              ? `+${traitDef.positiveEffect.amount} ${traitDef.positiveEffect.stat} (perm), ${Math.round(traitDef.negativeEffect.chance * 100)}% debuff risk`
+              : 'Unknown body part – risk unknown',
+            type: ItemType.BODY_PART,
+            rarity: traitDef.rarity,
+            value: 0,
+            traitDefinitionId: traitDef.id,
+            timesConsumed: existingConsumeTimes
+          };
+          const added = this.characterService.addItemToInventory(state.player.id, bodyPartItem);
+          if (added) {
+            bodyPartsGained.push(traitDef.name);
+          }
+        }
+      }
+
+      // Skill choices for milestone levels
+      let pendingSkillChoices: SkillDefinition[] | undefined;
+      let skillSelectionLevel: number | undefined;
+      if (levelUpInfo && levelUpInfo.newLevel % 5 === 0) {
+        const updatedChar = this.characterService.activeCharacter();
+        if (updatedChar) {
+          const choices = this.characterService.getSkillChoicesForLevel(updatedChar, levelUpInfo.newLevel);
+          if (choices.length > 0) {
+            pendingSkillChoices = choices;
+            skillSelectionLevel = levelUpInfo.newLevel;
+          }
+        }
+      }
+
       message = `Victory! ${state.player.name} defeated ${state.enemy.name}! Gained ${expGained} XP and ${goldGained} gold.`;
       if (isBoss) {
         message = `🏆 Boss Defeated! ${state.player.name} vanquished ${state.enemy.name}! Gained ${expGained} XP and ${goldGained} gold.`;
       }
       if (droppedItems.length > 0) {
         message += ` Found: ${droppedItems.join(', ')}`;
+      }
+      if (bodyPartsGained.length > 0) {
+        message += ` 🧬 Body part: ${bodyPartsGained.join(', ')}`;
       }
       if (questItemsGained.length > 0) {
         message += ` 📦 Quest item: ${questItemsGained.join(', ')}`;
@@ -452,9 +560,14 @@ export class CombatService {
         itemsGained: droppedItems,
         levelUpInfo,
         isBossKill: isBoss,
-        questItemsGained
+        questItemsGained,
+        bodyPartsGained,
+        pendingSkillChoices,
+        skillSelectionLevel
       });
     } else {
+      // Decrement trait debuffs even on defeat
+      this.characterService.decrementTraitFights(state.player.id);
       message = `Defeat! ${state.player.name} was defeated by ${state.enemy.name}!`;
       this._lastCombatResult.set({
         victory: false,
@@ -496,6 +609,7 @@ export class CombatService {
     });
     this._lastCombatResult.set(null);
     this._currentEnemyIsBoss.set(false);
+    this._traitConsumedThisCombat.set(false);
   }
 
   /**

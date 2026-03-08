@@ -7,7 +7,13 @@ import {
   canEquipItem
 } from '../models/character.model';
 import { Ability, AbilityType, createBasicAttack } from '../models/ability.model';
-import { Item, Weapon, Armor, Trinket, Bag, ItemType } from '../models/item.model';
+import { Item, Weapon, Armor, Trinket, Bag, ItemType, BodyPartItem } from '../models/item.model';
+import { SkillDefinition, getSkillChoicesForLevel } from '../models/skill.model';
+import {
+  ActiveTrait,
+  TraitDefinition,
+  TRAIT_DEFINITIONS
+} from '../models/trait.model';
 
 export interface LevelUpInfo {
   levelsGained: number;
@@ -17,6 +23,17 @@ export interface LevelUpInfo {
   mpGained: number;
   attackGained: number;
   defenseGained: number;
+}
+
+/** Result returned from consumeBodyPart */
+export interface BodyPartConsumeResult {
+  success: boolean;
+  wasBlind: boolean;
+  traitDefinition?: TraitDefinition;
+  negativeTriggered: boolean;
+  atTraitCap: boolean;
+  alreadyHasTrait: boolean;
+  message: string;
 }
 
 @Injectable({
@@ -312,12 +329,206 @@ export class CharacterService {
   }
 
   /**
-   * Load state from save game
+   * Load state from save game (with backward-compatibility for legacy saves)
    */
   loadState(characters: Character[], activeCharacterId: string | null): void {
-    this._characters.set(characters);
-    const active = characters.find(c => c.id === activeCharacterId) ?? null;
+    const migrated = characters.map(c => ({
+      ...c,
+      unlockedSkillIds: c.unlockedSkillIds ?? [],
+      traits: c.traits ?? []
+    }));
+    this._characters.set(migrated);
+    const active = migrated.find(c => c.id === activeCharacterId) ?? null;
     this._activeCharacter.set(active);
+  }
+
+  // ─── Skill system ────────────────────────────────────────────────────────────
+
+  /**
+   * Return the 3 skill choices available to a character at the given level milestone.
+   */
+  getSkillChoicesForLevel(character: Character, level: number): SkillDefinition[] {
+    return getSkillChoicesForLevel(character.characterClass, level, character.unlockedSkillIds);
+  }
+
+  /**
+   * Permanently learn a skill.
+   * Active skills are added to the abilities array for combat use.
+   * Passive skills immediately apply their stat bonuses.
+   */
+  learnSkill(characterId: string, skill: SkillDefinition): void {
+    this.updateCharacter(characterId, char => {
+      const newAbility: Ability = {
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        type: skill.abilityType,
+        damage: skill.damage,
+        healAmount: skill.healAmount,
+        cooldown: skill.cooldownTurns,
+        currentCooldown: 0,
+        manaCost: skill.manaCost,
+        levelRequired: skill.levelRequired,
+        isSkill: true,
+        isPassive: skill.isPassive,
+        passiveBonus: skill.passiveBonus,
+        isAoe: skill.isAoe
+      };
+
+      const newStats = { ...char.stats };
+      if (skill.isPassive && skill.passiveBonus) {
+        const b = skill.passiveBonus;
+        if (b.strength)     newStats.strength     += b.strength;
+        if (b.agility)      newStats.agility       += b.agility;
+        if (b.intelligence) newStats.intelligence  += b.intelligence;
+        if (b.defense)      newStats.defense       += b.defense;
+        if (b.attackPower)  newStats.attackPower   += b.attackPower;
+        if (b.maxHealth) {
+          newStats.maxHealth    += b.maxHealth;
+          newStats.currentHealth = Math.min(newStats.currentHealth + b.maxHealth, newStats.maxHealth);
+        }
+      }
+
+      return {
+        ...char,
+        abilities: [...char.abilities, newAbility],
+        unlockedSkillIds: [...char.unlockedSkillIds, skill.id],
+        stats: newStats
+      };
+    });
+  }
+
+  // ─── Trait system ─────────────────────────────────────────────────────────────
+
+  /**
+   * Consume a body part item from inventory.
+   * First consumption is "blind" – effects are revealed from the second time onwards.
+   * Returns details about what happened so the UI can show feedback.
+   *
+   * Limits: max 5 traits; duplicate trait types (same definitionId) are not re-added
+   * as separate entries – instead the existing one counts the consumption.
+   */
+  consumeBodyPart(characterId: string, item: BodyPartItem): BodyPartConsumeResult {
+    let result: BodyPartConsumeResult = {
+      success: false,
+      wasBlind: false,
+      negativeTriggered: false,
+      atTraitCap: false,
+      alreadyHasTrait: false,
+      message: ''
+    };
+
+    const def = TRAIT_DEFINITIONS.find(t => t.id === item.traitDefinitionId);
+    if (!def) {
+      result.message = 'Unknown body part.';
+      return result;
+    }
+
+    this.updateCharacter(characterId, char => {
+      const wasBlind = item.timesConsumed === 0;
+
+      // Check trait cap
+      const existingTrait = char.traits.find(t => t.definitionId === def.id);
+      if (!existingTrait && char.traits.length >= 5) {
+        result = { ...result, atTraitCap: true, wasBlind, traitDefinition: def, message: 'Trait limit (5) reached!' };
+        return char;
+      }
+
+      // Roll for negative effect
+      const negativeTriggered = Math.random() < def.negativeEffect.chance;
+      const newStats = { ...char.stats };
+
+      // Apply positive effect permanently
+      this.applyStatDelta(newStats, def.positiveEffect.stat, def.positiveEffect.amount);
+
+      // Apply negative effect if triggered
+      if (negativeTriggered && def.negativeEffect.durationFights === 0) {
+        // Tiny permanent penalty
+        this.applyStatDelta(newStats, def.negativeEffect.stat, -def.negativeEffect.amount);
+      }
+
+      // Update or add trait entry
+      let newTraits: ActiveTrait[];
+      if (existingTrait) {
+        newTraits = char.traits.map(t =>
+          t.definitionId === def.id
+            ? {
+                ...t,
+                consumeCount: t.consumeCount + 1,
+                negativeDebuffActive: negativeTriggered && def.negativeEffect.durationFights > 0,
+                negativeDebuffRemainingFights: negativeTriggered && def.negativeEffect.durationFights > 0
+                  ? def.negativeEffect.durationFights
+                  : t.negativeDebuffRemainingFights
+              }
+            : t
+        );
+      } else {
+        const newTrait: ActiveTrait = {
+          definitionId: def.id,
+          name: def.name,
+          rarity: def.rarity,
+          riskLevel: def.riskLevel,
+          positiveEffect: def.positiveEffect,
+          negativeEffect: def.negativeEffect,
+          negativeDebuffActive: negativeTriggered && def.negativeEffect.durationFights > 0,
+          negativeDebuffRemainingFights: negativeTriggered && def.negativeEffect.durationFights > 0
+            ? def.negativeEffect.durationFights
+            : 0,
+          consumeCount: 1,
+          spriteMod: def.spriteMod
+        };
+        newTraits = [...char.traits, newTrait];
+      }
+
+      // Remove body part from inventory
+      const newItems = char.inventory.items.filter(i => i.id !== item.id);
+
+      result = {
+        success: true,
+        wasBlind,
+        traitDefinition: def,
+        negativeTriggered,
+        atTraitCap: false,
+        alreadyHasTrait: !!existingTrait,
+        message: wasBlind
+          ? `Unknown – Risk: ${def.riskLevel === 'low' ? 'Low' : def.riskLevel === 'medium' ? 'Medium' : 'High'}`
+          : `${def.name} consumed: +${def.positiveEffect.amount} ${def.positiveEffect.stat}${negativeTriggered ? ` (Debuff active: -${def.negativeEffect.amount} ${def.negativeEffect.stat} for ${def.negativeEffect.durationFights} fights)` : ''}`
+      };
+
+      return {
+        ...char,
+        stats: newStats,
+        traits: newTraits,
+        inventory: { ...char.inventory, items: newItems }
+      };
+    });
+
+    return result;
+  }
+
+  /**
+   * Decrement the fight counter on active trait debuffs.
+   * Called after each combat ends.
+   */
+  decrementTraitFights(characterId: string): void {
+    this.updateCharacter(characterId, char => {
+      const newTraits = char.traits.map(t => {
+        if (!t.negativeDebuffActive || t.negativeDebuffRemainingFights <= 0) return t;
+        const remaining = t.negativeDebuffRemainingFights - 1;
+        return {
+          ...t,
+          negativeDebuffRemainingFights: remaining,
+          negativeDebuffActive: remaining > 0
+        };
+      });
+      return { ...char, traits: newTraits };
+    });
+  }
+
+  private applyStatDelta(stats: Record<string, number>, stat: string, delta: number): void {
+    if (stats[stat] !== undefined) {
+      stats[stat] = Math.max(0, stats[stat] + delta);
+    }
   }
 
   private getStartingAbilities(characterClass: CharacterClass): Ability[] {

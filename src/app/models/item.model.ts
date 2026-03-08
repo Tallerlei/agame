@@ -6,7 +6,8 @@ export enum ItemType {
   CONSUMABLE = 'CONSUMABLE',
   TRINKET = 'TRINKET',
   ARMOR = 'ARMOR',
-  BAG = 'BAG'
+  BAG = 'BAG',
+  BODY_PART = 'BODY_PART'
 }
 
 /**
@@ -117,4 +118,16 @@ export interface Armor extends Item {
 export interface Bag extends Item {
   type: ItemType.BAG;
   slotsGranted: number;
+}
+
+/**
+ * Body part dropped by an enemy that can be consumed to gain a Trait.
+ * First consumption is "blind" (effects unknown until after eating).
+ */
+export interface BodyPartItem extends Item {
+  type: ItemType.BODY_PART;
+  /** References a TraitDefinition.id */
+  traitDefinitionId: string;
+  /** How many times this item type has been consumed by the character (0 = never = blind) */
+  timesConsumed: number;
 }
