@@ -5,6 +5,7 @@ import { ItemService } from './item.service';
 import { CharacterClass, createCharacter } from '../models/character.model';
 import { ItemType, ItemRarity, Consumable } from '../models/item.model';
 import { createEnemy } from '../models/combat.model';
+import { Ability, AbilityType } from '../models/ability.model';
 
 describe('CombatService', () => {
   let service: CombatService;
@@ -37,6 +38,34 @@ describe('CombatService', () => {
     }
     const enemy = createEnemy('Goblin', 1);
     service.startCombat(character, enemy);
+  }
+
+  function makeAttackAbility(damage: number): Ability {
+    return {
+      id: 'test-attack',
+      name: 'Test Strike',
+      description: 'A test attack',
+      type: AbilityType.ATTACK,
+      damage,
+      cooldown: 3,
+      currentCooldown: 0,
+      manaCost: 10,
+      levelRequired: 1
+    };
+  }
+
+  function makeHealAbility(healAmount: number): Ability {
+    return {
+      id: 'test-heal',
+      name: 'Test Heal',
+      description: 'A test heal',
+      type: AbilityType.HEAL,
+      healAmount,
+      cooldown: 3,
+      currentCooldown: 0,
+      manaCost: 10,
+      levelRequired: 1
+    };
   }
 
   describe('useConsumable', () => {
@@ -135,6 +164,94 @@ describe('CombatService', () => {
       service.useConsumable(brokenPotion);
 
       expect(service.combatState().player!.stats.currentHealth).toBe(healthBefore);
+    });
+  });
+
+  describe('useAbility – spell scaling', () => {
+    it('should deal more damage than the base ability.damage for a Mage due to intelligence scaling', () => {
+      const mage = createCharacter('Mage', CharacterClass.MAGE);
+      // Mage starts with intelligence 18, scaling bonus = floor(18 * 0.5) = 9
+      mage.stats.currentMana = 100;
+      const enemy = createEnemy('Goblin', 1);
+      enemy.defense = 0; // No defense so damage = scaledDamage exactly (minus small variance)
+      service.startCombat(mage, enemy);
+
+      const ability = makeAttackAbility(10);
+      service.useAbility(ability);
+
+      const log = service.combatState().combatLog;
+      const entry = log[log.length - 1];
+      // scaling bonus = floor(18 * 0.5) = 9, scaledDamage = 10 + 9 = 19
+      // damage should be at least 1 and message should show scaling info
+      expect(entry.message).toContain('scaling');
+      expect(entry.message).toContain('9'); // scaling bonus
+    });
+
+    it('should deal more damage than base for a Warrior due to strength scaling', () => {
+      const warrior = createCharacter('Warrior', CharacterClass.WARRIOR);
+      // Warrior starts with strength 15, scaling bonus = floor(15 * 0.5) = 7
+      warrior.stats.currentMana = 100;
+      const enemy = createEnemy('Goblin', 1);
+      enemy.defense = 0;
+      service.startCombat(warrior, enemy);
+
+      const ability = makeAttackAbility(10);
+      service.useAbility(ability);
+
+      const log = service.combatState().combatLog;
+      const entry = log[log.length - 1];
+      expect(entry.message).toContain('scaling');
+      expect(entry.message).toContain('7'); // scaling bonus
+    });
+
+    it('should deal more damage than base for a Rogue due to agility scaling', () => {
+      const rogue = createCharacter('Rogue', CharacterClass.ROGUE);
+      // Rogue starts with agility 18, scaling bonus = floor(18 * 0.5) = 9
+      rogue.stats.currentMana = 100;
+      const enemy = createEnemy('Goblin', 1);
+      enemy.defense = 0;
+      service.startCombat(rogue, enemy);
+
+      const ability = makeAttackAbility(10);
+      service.useAbility(ability);
+
+      const log = service.combatState().combatLog;
+      const entry = log[log.length - 1];
+      expect(entry.message).toContain('scaling');
+      expect(entry.message).toContain('9'); // scaling bonus
+    });
+
+    it('should scale heal abilities with intelligence for a Healer', () => {
+      const healer = createCharacter('Healer', CharacterClass.HEALER);
+      // Healer starts with intelligence 15, scaling bonus = floor(15 * 0.5) = 7
+      healer.stats.currentMana = 100;
+      healer.stats.currentHealth = 50;
+      const enemy = createEnemy('Goblin', 1);
+      service.startCombat(healer, enemy);
+
+      const healAbility = makeHealAbility(20);
+      service.useAbility(healAbility);
+
+      const log = service.combatState().combatLog;
+      const entry = log[log.length - 1];
+      // Healing = 20 + 7 = 27
+      expect(entry.healing).toBe(27);
+      expect(entry.message).toContain('27');
+      expect(entry.message).toContain('scaling');
+    });
+
+    it('should log the base damage and scaling bonus separately in the message', () => {
+      const mage = createCharacter('Mage', CharacterClass.MAGE);
+      mage.stats.currentMana = 100;
+      const enemy = createEnemy('Goblin', 1);
+      enemy.defense = 0;
+      service.startCombat(mage, enemy);
+
+      const ability = makeAttackAbility(30); // like Ice Lance
+      service.useAbility(ability);
+
+      const entry = service.combatState().combatLog.at(-1)!;
+      expect(entry.message).toContain('base 30');
     });
   });
 });

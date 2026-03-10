@@ -8,7 +8,7 @@ import {
   createEnemy,
   calculateDamage
 } from '../models/combat.model';
-import { Character } from '../models/character.model';
+import { Character, CharacterClass } from '../models/character.model';
 import { calculateEncumbrance } from '../models/character.model';
 import { Ability, AbilityType } from '../models/ability.model';
 import { Consumable, ItemType, BodyPartItem, ItemRarity } from '../models/item.model';
@@ -185,6 +185,24 @@ export class CombatService {
   }
 
   /**
+   * Returns the ability scaling bonus based on the character's primary stat.
+   * This ensures spells and skills scale with the main attribute of each class.
+   */
+  private getAbilityScalingBonus(player: Character): number {
+    switch (player.characterClass) {
+      case CharacterClass.MAGE:
+      case CharacterClass.HEALER:
+        return Math.floor(player.stats.intelligence * 0.5);
+      case CharacterClass.WARRIOR:
+        return Math.floor(player.stats.strength * 0.5);
+      case CharacterClass.ROGUE:
+        return Math.floor(player.stats.agility * 0.5);
+      default:
+        return 0;
+    }
+  }
+
+  /**
    * Player uses an ability
    */
   useAbility(ability: Ability): void {
@@ -201,31 +219,36 @@ export class CombatService {
       return; // Not enough mana
     }
 
+    const scalingBonus = this.getAbilityScalingBonus(state.player);
+
     let logEntry: CombatLogEntry;
     let newEnemyHealth = state.enemy.currentHealth;
     let newPlayerHealth = state.player.stats.currentHealth;
 
     if (ability.type === AbilityType.ATTACK && ability.damage) {
-      const damage = calculateDamage(ability.damage, state.enemy.defense);
+      const scaledDamage = ability.damage + scalingBonus;
+      const damage = calculateDamage(scaledDamage, state.enemy.defense);
       newEnemyHealth = Math.max(0, state.enemy.currentHealth - damage);
+      const scalingNote = scalingBonus > 0 ? ` (base ${ability.damage} + ${scalingBonus} scaling)` : '';
       logEntry = {
         timestamp: Date.now(),
         attacker: state.player.name,
         defender: state.enemy.name,
         action: CombatActionType.ABILITY,
         damage,
-        message: `${state.player.name} uses ${ability.name} on ${state.enemy.name} for ${damage} damage!`
+        message: `${state.player.name} uses ${ability.name} on ${state.enemy.name} for ${damage} damage!${scalingNote}`
       };
     } else if (ability.type === AbilityType.HEAL && ability.healAmount) {
-      const healing = ability.healAmount;
+      const healing = ability.healAmount + scalingBonus;
       newPlayerHealth = Math.min(state.player.stats.maxHealth, newPlayerHealth + healing);
+      const healingScalingNote = scalingBonus > 0 ? ` (base ${ability.healAmount} + ${scalingBonus} scaling)` : '';
       logEntry = {
         timestamp: Date.now(),
         attacker: state.player.name,
         defender: state.player.name,
         action: CombatActionType.ABILITY,
         healing,
-        message: `${state.player.name} uses ${ability.name} and heals for ${healing}!`
+        message: `${state.player.name} uses ${ability.name} and heals for ${healing}!${healingScalingNote}`
       };
     } else {
       return;
@@ -330,12 +353,27 @@ export class CombatService {
 
     this._traitConsumedThisCombat.set(true);
 
+    // Build a detailed log message showing the actual buff/debuff values applied
+    let logMessage: string;
+    if (result.traitDefinition) {
+      const def = result.traitDefinition;
+      const positiveText = `+${def.positiveEffect.amount} ${def.positiveEffect.stat}`;
+      const negativeText = (def.negativeEffect && result.negativeTriggered)
+        ? ` ⚠ Debuff: -${def.negativeEffect.amount} ${def.negativeEffect.stat} for ${def.negativeEffect.durationFights} fights`
+        : ' (no debuff triggered)';
+      logMessage = result.wasBlind
+        ? `${def.name} consumed (unknown risk)! Revealed: ${positiveText}${negativeText}`
+        : `${def.name} consumed: ${positiveText}${negativeText}`;
+    } else {
+      logMessage = result.message;
+    }
+
     const logEntry: CombatLogEntry = {
       timestamp: Date.now(),
       attacker: state.player.name,
       defender: state.player.name,
       action: CombatActionType.USE_ITEM,
-      message: result.message
+      message: logMessage
     };
 
     // Sync updated character into combat state (stats may have changed)
