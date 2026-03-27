@@ -6,6 +6,7 @@ import { Character } from './character.model';
 export interface Enemy {
   id: string;
   name: string;
+  emoji: string;
   level: number;
   maxHealth: number;
   currentHealth: number;
@@ -13,6 +14,44 @@ export interface Enemy {
   defense: number;
   experienceReward: number;
   goldReward: number;
+}
+
+/** Maps enemy names to display emojis */
+export function getEnemyEmoji(name: string): string {
+  const emojiMap: Record<string, string> = {
+    'Goblin': '👺',
+    'Orc': '👹',
+    'Skeleton': '💀',
+    'Wolf': '🐺',
+    'Bandit': '🗡️',
+    'Troll': '👾',
+    'Dragon': '🐉',
+    'Guardian': '🛡️',
+    'Cave Troll': '🧌',
+  };
+  return emojiMap[name] ?? '👿';
+}
+
+/** Result of a damage calculation, including critical hit flag */
+export interface DamageResult {
+  damage: number;
+  isCritical: boolean;
+}
+
+/** Calculate damage with optional critical hit chance (default 15%) */
+export function calculateDamageResult(
+  attackPower: number,
+  defense: number,
+  critChance = 0.15
+): DamageResult {
+  const isCritical = Math.random() < critChance;
+  const critMultiplier = isCritical ? 1.5 : 1;
+  const baseDamage = attackPower - defense / 2;
+  const variance = Math.random() * 0.2 - 0.1;
+  return {
+    damage: Math.max(1, Math.floor(baseDamage * (1 + variance) * critMultiplier)),
+    isCritical
+  };
 }
 
 /**
@@ -70,6 +109,7 @@ export function createEnemy(name: string, level: number): Enemy {
   return {
     id: crypto.randomUUID(),
     name,
+    emoji: getEnemyEmoji(name),
     level,
     maxHealth: Math.floor(50 * healthMultiplier),
     currentHealth: Math.floor(50 * healthMultiplier),
