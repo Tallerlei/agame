@@ -2,6 +2,8 @@ import {
   Enemy,
   createEnemy,
   calculateDamage,
+  calculateDamageResult,
+  getEnemyEmoji,
   CombatActionType
 } from './combat.model';
 
@@ -33,6 +35,32 @@ describe('Combat Model', () => {
       const enemy2 = createEnemy('Goblin', 1);
       
       expect(enemy1.id).not.toBe(enemy2.id);
+    });
+
+    it('should assign an emoji for known enemy names', () => {
+      expect(createEnemy('Goblin', 1).emoji).toBe('👺');
+      expect(createEnemy('Orc', 1).emoji).toBe('👹');
+      expect(createEnemy('Skeleton', 1).emoji).toBe('💀');
+      expect(createEnemy('Wolf', 1).emoji).toBe('🐺');
+      expect(createEnemy('Dragon', 1).emoji).toBe('🐉');
+    });
+
+    it('should assign a fallback emoji for unknown enemy names', () => {
+      expect(createEnemy('Unknown Beast', 1).emoji).toBe('👿');
+    });
+  });
+
+  describe('getEnemyEmoji', () => {
+    it('should return the correct emoji for known enemies', () => {
+      expect(getEnemyEmoji('Goblin')).toBe('👺');
+      expect(getEnemyEmoji('Dragon')).toBe('🐉');
+      expect(getEnemyEmoji('Guardian')).toBe('🛡️');
+      expect(getEnemyEmoji('Cave Troll')).toBe('🧌');
+    });
+
+    it('should return the fallback emoji for unknown enemies', () => {
+      expect(getEnemyEmoji('Zombie')).toBe('👿');
+      expect(getEnemyEmoji('')).toBe('👿');
     });
   });
 
@@ -66,6 +94,41 @@ describe('Combat Model', () => {
       }
       
       expect(lowDefenseTotal).toBeGreaterThan(highDefenseTotal);
+    });
+  });
+
+  describe('calculateDamageResult', () => {
+    it('should return at least 1 damage', () => {
+      const result = calculateDamageResult(1, 100);
+      expect(result.damage).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should return an isCritical boolean', () => {
+      const result = calculateDamageResult(20, 5);
+      expect(typeof result.isCritical).toBe('boolean');
+    });
+
+    it('should deal more damage on a critical hit than a non-critical hit on average', () => {
+      // Force 100% crit chance and compare with 0% crit chance over many samples
+      let critTotal = 0;
+      let noCritTotal = 0;
+      for (let i = 0; i < 100; i++) {
+        critTotal += calculateDamageResult(20, 5, 1).damage;
+        noCritTotal += calculateDamageResult(20, 5, 0).damage;
+      }
+      expect(critTotal).toBeGreaterThan(noCritTotal);
+    });
+
+    it('should always be a critical hit when critChance is 1', () => {
+      for (let i = 0; i < 10; i++) {
+        expect(calculateDamageResult(20, 5, 1).isCritical).toBe(true);
+      }
+    });
+
+    it('should never be a critical hit when critChance is 0', () => {
+      for (let i = 0; i < 10; i++) {
+        expect(calculateDamageResult(20, 5, 0).isCritical).toBe(false);
+      }
     });
   });
 });

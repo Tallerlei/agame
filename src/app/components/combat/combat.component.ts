@@ -114,9 +114,17 @@ import { SkillDefinition } from '../../models/skill.model';
       } @else if (combatState().isActive) {
         <div class="combat-arena">
           <!-- Enemy Section -->
-          <div class="combatant enemy" [class.boss]="isBossEnemy()">
+          <div class="combatant enemy"
+            [class.boss]="isBossEnemy()"
+            [class.hit]="isEnemyHit()"
+            [class.ability-hit]="isAbilityHit()"
+            [class.crit-hit]="isCritHit()">
             @if (isBossEnemy()) {
               <span class="boss-badge">💀 BOSS</span>
+            }
+            <div class="enemy-avatar">{{ combatState().enemy?.emoji }}</div>
+            @if (isCritHit()) {
+              <div class="crit-indicator">⚡ CRITICAL!</div>
             }
             <h3>{{ combatState().enemy?.name }}</h3>
             <span class="level">Lv. {{ combatState().enemy?.level }}</span>
@@ -134,7 +142,7 @@ import { SkillDefinition } from '../../models/skill.model';
           <div class="vs-indicator">VS</div>
 
           <!-- Player Section -->
-          <div class="combatant player">
+          <div class="combatant player" [class.heal-pulse]="isPlayerHeal()">
             <h3>{{ combatState().player?.name }}</h3>
             <span class="level">Lv. {{ combatState().player?.level }}</span>
             <div class="health-bar">
@@ -216,7 +224,7 @@ import { SkillDefinition } from '../../models/skill.model';
             <h4>Combat Log</h4>
             <div class="log-entries">
               @for (entry of combatState().combatLog.slice(-5); track entry.timestamp) {
-                <div class="log-entry">{{ entry.message }}</div>
+                <div class="log-entry" [class.log-crit]="entry.message.includes('CRITICAL')">{{ entry.message }}</div>
               }
             </div>
           </div>
@@ -269,6 +277,7 @@ import { SkillDefinition } from '../../models/skill.model';
     .log-entries{max-height:150px;overflow-y:auto}
     .log-entry{padding:.25rem 0;color:#a0a0a0;font-size:.85rem;border-bottom:1px solid #2a2a4a}
     .log-entry:last-child{border-bottom:none;color:#fff}
+    .log-entry.log-crit{color:#ffd700;font-weight:bold}
     .result-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:1000}
     .result-modal{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:2rem;max-width:460px;width:90%;text-align:center}
     .result-modal.victory{border:2px solid #ffd700}
@@ -300,6 +309,13 @@ import { SkillDefinition } from '../../models/skill.model';
     .skill-desc{font-size:.85rem;color:#c0c0c0}
     .skill-learned h2{color:#27ae60;margin:0 0 1rem}
     .learned-name{font-size:1.3rem;color:#ffd700;font-weight:bold;margin-bottom:1.5rem}
+    .enemy-avatar{font-size:3.5rem;text-align:center}
+    .crit-indicator{color:#ffd700;font-weight:bold;text-align:center}
+    @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    @keyframes burst{40%{transform:scale(1.1);filter:brightness(2)}}
+    @keyframes glow{50%{box-shadow:0 0 15px rgba(39,174,96,.7)}}
+    .combatant.enemy.hit{animation:shake .4s}.combatant.enemy.ability-hit,.combatant.enemy.crit-hit{animation:burst .5s}
+    .combatant.enemy.crit-hit{border-color:#ffd700!important}.combatant.player.heal-pulse{animation:glow .6s}
   `]
 })
 export class CombatComponent {
@@ -310,10 +326,29 @@ export class CombatComponent {
   lastCombatResult = this.combatService.lastCombatResult;
   isBossEnemy = this.combatService.currentEnemyIsBoss;
   traitConsumedThisCombat = this.combatService.traitConsumedThisCombat;
+  lastActionAnimation = this.combatService.lastActionAnimation;
+  lastActionWasCritical = this.combatService.lastActionWasCritical;
 
   /** Set to true after choosing a skill (shows "Skill learned!" screen) */
   skillChosen = false;
   skillLearnedName = '';
+
+  isEnemyHit(): boolean {
+    return this.lastActionAnimation() === 'attack' && !this.lastActionWasCritical();
+  }
+
+  isAbilityHit(): boolean {
+    return this.lastActionAnimation() === 'ability-attack' && !this.lastActionWasCritical();
+  }
+
+  isCritHit(): boolean {
+    return (this.lastActionAnimation() === 'attack' || this.lastActionAnimation() === 'ability-attack')
+      && this.lastActionWasCritical();
+  }
+
+  isPlayerHeal(): boolean {
+    return this.lastActionAnimation() === 'ability-heal';
+  }
 
   canFight(): boolean {
     return this.characterService.activeCharacter() !== null;

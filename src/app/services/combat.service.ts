@@ -6,7 +6,8 @@ import {
   CombatResult,
   Enemy,
   createEnemy,
-  calculateDamage
+  calculateDamage,
+  calculateDamageResult
 } from '../models/combat.model';
 import { Character, CharacterClass } from '../models/character.model';
 import { calculateEncumbrance } from '../models/character.model';
@@ -63,11 +64,17 @@ export class CombatService {
   private _currentEnemyIsBoss = signal<boolean>(false);
   /** Tracks whether a body-part/trait consumable was already used this combat (once per combat) */
   private _traitConsumedThisCombat = signal<boolean>(false);
+  /** Tracks the current player action animation type */
+  private _lastActionAnimation = signal<'attack' | 'ability-attack' | 'ability-heal' | null>(null);
+  /** Tracks whether the last player action was a critical hit */
+  private _lastActionWasCritical = signal<boolean>(false);
 
   combatState = this._combatState.asReadonly();
   lastCombatResult = this._lastCombatResult.asReadonly();
   currentEnemyIsBoss = this._currentEnemyIsBoss.asReadonly();
   traitConsumedThisCombat = this._traitConsumedThisCombat.asReadonly();
+  lastActionAnimation = this._lastActionAnimation.asReadonly();
+  lastActionWasCritical = this._lastActionWasCritical.asReadonly();
 
   constructor(
     private characterService: CharacterService,
@@ -153,20 +160,25 @@ export class CombatService {
     const encumbrancePenalty = Math.max(0, encumbrance - 0.5) * 0.5;
     const effectiveAttack = Math.max(1, Math.floor(rawAttack * (1 - encumbrancePenalty)));
 
-    const damage = calculateDamage(effectiveAttack, state.enemy.defense);
+    const result = calculateDamageResult(effectiveAttack, state.enemy.defense);
+    const damage = result.damage;
 
     const newEnemyHealth = Math.max(0, state.enemy.currentHealth - damage);
     const encumbranceNote = encumbrancePenalty > 0
       ? ` (encumbered: -${Math.round(encumbrancePenalty * 100)}% ATK)`
       : '';
+    const critNote = result.isCritical ? ' ⚡ CRITICAL HIT!' : '';
     const logEntry: CombatLogEntry = {
       timestamp: Date.now(),
       attacker: state.player.name,
       defender: state.enemy.name,
       action: CombatActionType.ATTACK,
       damage,
-      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!${encumbranceNote}`
+      message: `${state.player.name} attacks ${state.enemy.name} for ${damage} damage!${encumbranceNote}${critNote}`
     };
+
+    this._lastActionAnimation.set('attack');
+    this._lastActionWasCritical.set(result.isCritical);
 
     this._combatState.update(s => ({
       ...s,
@@ -227,17 +239,21 @@ export class CombatService {
 
     if (ability.type === AbilityType.ATTACK && ability.damage) {
       const scaledDamage = ability.damage + scalingBonus;
-      const damage = calculateDamage(scaledDamage, state.enemy.defense);
+      const result = calculateDamageResult(scaledDamage, state.enemy.defense);
+      const damage = result.damage;
       newEnemyHealth = Math.max(0, state.enemy.currentHealth - damage);
       const scalingNote = scalingBonus > 0 ? ` (base ${ability.damage} + ${scalingBonus} scaling)` : '';
+      const critNote = result.isCritical ? ' ⚡ CRITICAL HIT!' : '';
       logEntry = {
         timestamp: Date.now(),
         attacker: state.player.name,
         defender: state.enemy.name,
         action: CombatActionType.ABILITY,
         damage,
-        message: `${state.player.name} uses ${ability.name} on ${state.enemy.name} for ${damage} damage!${scalingNote}`
+        message: `${state.player.name} uses ${ability.name} on ${state.enemy.name} for ${damage} damage!${scalingNote}${critNote}`
       };
+      this._lastActionAnimation.set('ability-attack');
+      this._lastActionWasCritical.set(result.isCritical);
     } else if (ability.type === AbilityType.HEAL && ability.healAmount) {
       const healing = ability.healAmount + scalingBonus;
       newPlayerHealth = Math.min(state.player.stats.maxHealth, newPlayerHealth + healing);
@@ -250,6 +266,8 @@ export class CombatService {
         healing,
         message: `${state.player.name} uses ${ability.name} and heals for ${healing}!${healingScalingNote}`
       };
+      this._lastActionAnimation.set('ability-heal');
+      this._lastActionWasCritical.set(false);
     } else {
       return;
     }
@@ -399,6 +417,10 @@ export class CombatService {
     if (!state.isActive || !state.player || !state.enemy) {
       return;
     }
+
+    // Clear player action animation once enemy begins their turn
+    this._lastActionAnimation.set(null);
+    this._lastActionWasCritical.set(false);
 
     const playerDefense = state.player.stats.defense +
       (state.player.equipment.chest?.defense || 0) +
